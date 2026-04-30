@@ -206,6 +206,78 @@ app.post('/create-checkout-session', async (req, res) => {
   }
 });
 
+// ═══ CANCELAR SUSCRIPCIÓN (al final del período) ═══
+app.post('/cancel-subscription', async (req, res) => {
+  try {
+    const { firebaseUid } = req.body;
+    if (!firebaseUid) return res.status(400).json({ error: 'firebaseUid requerido' });
+
+    const userDoc = await db.collection('users').doc(firebaseUid).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+    const subscriptionId = userData.subscription?.stripeSubscriptionId;
+
+    if (!subscriptionId) {
+      return res.status(400).json({ error: 'No se encontró suscripción activa' });
+    }
+
+    // Cancelar al final del período (no inmediatamente)
+    const sub = await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: true
+    });
+
+    // Actualizar Firestore
+    await db.collection('users').doc(firebaseUid).set({
+      subscription: {
+        cancelAtPeriodEnd: true,
+        currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    }, { merge: true });
+
+    res.json({
+      success: true,
+      cancelAtPeriodEnd: true,
+      currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString()
+    });
+  } catch (err) {
+    console.error('Cancel subscription error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══ REACTIVAR SUSCRIPCIÓN (quitar cancelación pendiente) ═══
+app.post('/reactivate-subscription', async (req, res) => {
+  try {
+    const { firebaseUid } = req.body;
+    if (!firebaseUid) return res.status(400).json({ error: 'firebaseUid requerido' });
+
+    const userDoc = await db.collection('users').doc(firebaseUid).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+    const subscriptionId = userData.subscription?.stripeSubscriptionId;
+
+    if (!subscriptionId) {
+      return res.status(400).json({ error: 'No se encontró suscripción' });
+    }
+
+    // Reactivar (quitar cancel_at_period_end)
+    await stripe.subscriptions.update(subscriptionId, {
+      cancel_at_period_end: false
+    });
+
+    await db.collection('users').doc(firebaseUid).set({
+      subscription: {
+        cancelAtPeriodEnd: false,
+        updatedAt: new Date().toISOString()
+      }
+    }, { merge: true });
+
+    res.json({ success: true, cancelAtPeriodEnd: false });
+  } catch (err) {
+    console.error('Reactivate error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ═══ CREAR PORTAL SESSION (para cancelar/gestionar suscripción) ═══
 app.post('/create-portal-session', async (req, res) => {
   try {
