@@ -13,20 +13,15 @@ const db = admin.firestore();
 const app = express();
 
 // ═══ CORS ═══
-const ALLOWED_ORIGINS = [
-  'https://teccapitalweb.github.io',
-  'http://localhost:3000',
-  'http://127.0.0.1:5500'
-];
-app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin || ALLOWED_ORIGINS.some(o => origin.startsWith(o))) {
-      callback(null, true);
-    } else {
-      callback(null, true); // Permitir todo en desarrollo
-    }
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
-}));
+  next();
+});
 
 // ═══ WEBHOOK (necesita raw body — debe ir ANTES de json parser) ═══
 app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
