@@ -1,0 +1,15 @@
+{
+  "name": "dermalysse-webhook-server",
+  "version": "1.0.0",
+  "description": "Stripe webhook + checkout session server for Club Dermalysse",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "firebase-admin": "^12.0.0",
+    "stripe": "^14.0.0"
+  }
+}
