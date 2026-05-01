@@ -61,6 +61,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               priceId: priceId,
               plan: interval === 'year' ? 'anual' : 'mensual',
               currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+              subscribedAt: new Date().toISOString(),
               cancelAtPeriodEnd: false,
               updatedAt: new Date().toISOString()
             }
