@@ -75,6 +75,17 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             }, { merge: true });
           } catch(e) {}
           console.log('✅ Suscripción activada para:', uid, '- Plan:', interval);
+
+          // Registrar actividad
+          try {
+            const memberDoc = await db.collection('members').doc(uid).get();
+            const memberName = memberDoc.exists ? memberDoc.data().name : uid;
+            await db.collection('activity').add({
+              text: '<strong>' + memberName + '</strong> se suscribió al plan ' + (interval === 'year' ? 'Anual' : 'Mensual'),
+              color: 'blue',
+              date: new Date().toISOString()
+            });
+          } catch(e) {}
         }
         break;
       }
@@ -123,6 +134,17 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             }, { merge: true });
           } catch(e) {}
           console.log('❌ Suscripción cancelada para:', uid);
+
+          // Registrar actividad
+          try {
+            const memberDoc = await db.collection('members').doc(uid).get();
+            const memberName = memberDoc.exists ? memberDoc.data().name : uid;
+            await db.collection('activity').add({
+              text: '<strong>' + memberName + '</strong> canceló su suscripción',
+              color: 'orange',
+              date: new Date().toISOString()
+            });
+          } catch(e) {}
         }
         break;
       }
