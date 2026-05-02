@@ -14,11 +14,16 @@ const db = admin.firestore();
 // ═══ EMAIL (Gmail SMTP) ═══
 const ADMIN_EMAIL = 'teccapitalweb@gmail.com';
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.GMAIL_USER || ADMIN_EMAIL,
     pass: process.env.GMAIL_APP_PASSWORD
-  }
+  },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000
 });
 
 async function sendEmail(to, subject, html) {
@@ -101,7 +106,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               stripeSubscriptionId: subscriptionId,
               priceId: priceId,
               plan: interval === 'year' ? 'anual' : 'mensual',
-              currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+              currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString()),
               subscribedAt: new Date().toISOString(),
               cancelAtPeriodEnd: false,
               updatedAt: new Date().toISOString()
@@ -165,7 +170,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           await db.collection('users').doc(uid).set({
             subscription: {
               status: 'active',
-              currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+              currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString()),
               cancelAtPeriodEnd: sub.cancel_at_period_end,
               updatedAt: new Date().toISOString()
             }
@@ -246,7 +251,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             subscription: {
               status: sub.status === 'active' ? 'active' : sub.status,
               cancelAtPeriodEnd: sub.cancel_at_period_end,
-              currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+              currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString()),
               updatedAt: new Date().toISOString()
             }
           }, { merge: true });
@@ -353,7 +358,7 @@ app.post('/cancel-subscription', async (req, res) => {
     await db.collection('users').doc(firebaseUid).set({
       subscription: {
         cancelAtPeriodEnd: true,
-        currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+        currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString()),
         updatedAt: new Date().toISOString()
       }
     }, { merge: true });
@@ -361,14 +366,14 @@ app.post('/cancel-subscription', async (req, res) => {
     res.json({
       success: true,
       cancelAtPeriodEnd: true,
-      currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString()
+      currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString())
     });
 
     // Enviar emails de cancelación programada
     try {
       const memberEmail = userData.email || '';
       const memberName = userData.name || '';
-      const endDate = new Date(sub.current_period_end * 1000).toLocaleDateString('es-MX', { day:'numeric', month:'long', year:'numeric' });
+      const endDate = sub.current_period_end ? new Date(sub.current_period_end * 1000).toLocaleDateString('es-MX', { day:'numeric', month:'long', year:'numeric' }) : 'N/A';
       if (memberEmail) {
         sendEmail(memberEmail, 'Cancelación programada - Club Dermalysse',
           emailTemplate('Cancelación programada',
