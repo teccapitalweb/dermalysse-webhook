@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin = require('firebase-admin');
+const nodemailer = require('nodemailer');
 
 // ═══ FIREBASE ADMIN ═══
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
@@ -9,6 +10,46 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 const db = admin.firestore();
+
+// ═══ EMAIL (Gmail SMTP) ═══
+const ADMIN_EMAIL = 'teccapitalweb@gmail.com';
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER || ADMIN_EMAIL,
+    pass: process.env.GMAIL_APP_PASSWORD
+  }
+});
+
+async function sendEmail(to, subject, html) {
+  try {
+    await transporter.sendMail({
+      from: '"Club Dermalysse" <' + ADMIN_EMAIL + '>',
+      to,
+      subject,
+      html
+    });
+    console.log('📧 Email enviado a:', to);
+  } catch(e) { console.error('Email error:', e.message); }
+}
+
+function emailTemplate(title, body, buttonText, buttonUrl) {
+  return `
+  <div style="font-family:'DM Sans',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#faf7f2;padding:0;">
+    <div style="background:#2e5f7a;padding:2rem;text-align:center;">
+      <h1 style="color:#fff;margin:0;font-size:1.5rem;">Club Dermalysse</h1>
+    </div>
+    <div style="padding:2rem 2.5rem;">
+      <h2 style="color:#3d2e1e;margin:0 0 1rem;">${title}</h2>
+      <div style="color:#6b5e50;font-size:.95rem;line-height:1.7;">${body}</div>
+      ${buttonText ? '<div style="text-align:center;margin:2rem 0;"><a href="' + buttonUrl + '" style="background:#2e5f7a;color:#fff;padding:.85rem 2rem;border-radius:10px;text-decoration:none;font-weight:700;font-size:1rem;display:inline-block;">' + buttonText + '</a></div>' : ''}
+    </div>
+    <div style="background:#f0ebe3;padding:1.25rem 2.5rem;text-align:center;font-size:.8rem;color:#9a8e7f;">
+      Club Dermalysse · Dermatología y Estética Profesional<br>
+      Este correo fue enviado automáticamente. No responder a este mensaje.
+    </div>
+  </div>`;
+}
 
 const app = express();
 
@@ -76,6 +117,27 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           } catch(e) {}
           console.log('✅ Suscripción activada para:', uid, '- Plan:', interval);
 
+          // Enviar email al miembro
+          const memberEmail = session.customer_details?.email || '';
+          const planName = interval === 'year' ? 'Anual ($1,799 MXN/año)' : 'Mensual ($200 MXN/mes)';
+          if (memberEmail) {
+            sendEmail(memberEmail, '¡Bienvenido/a al Club Dermalysse!',
+              emailTemplate('¡Gracias por suscribirte!',
+                '<p>Tu suscripción al <strong>Plan ' + planName + '</strong> ha sido activada exitosamente.</p>' +
+                '<p>Ya tienes acceso completo a todos los cursos, webinars en vivo, material PDF y la comunidad del Club Dermalysse.</p>' +
+                '<p style="margin-top:1rem;"><strong>Plan:</strong> ' + planName + '<br><strong>Estado:</strong> Activa</p>',
+                'Ir al Club', 'https://teccapitalweb.github.io/Club-Dermalysse-main/')
+            );
+          }
+
+          // Enviar email al admin
+          sendEmail(ADMIN_EMAIL, 'Nueva suscripción - Club Dermalysse',
+            emailTemplate('Nueva suscripción',
+              '<p><strong>' + (memberEmail || uid) + '</strong> se ha suscrito al <strong>Plan ' + planName + '</strong>.</p>' +
+              '<p style="margin-top:1rem;"><strong>ID de suscripción:</strong> ' + subscriptionId + '<br><strong>Fecha:</strong> ' + new Date().toLocaleString('es-MX') + '</p>',
+              'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
+          );
+
           // Registrar actividad
           try {
             const memberDoc = await db.collection('members').doc(uid).get();
@@ -134,6 +196,31 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             }, { merge: true });
           } catch(e) {}
           console.log('❌ Suscripción cancelada para:', uid);
+
+          // Enviar email al miembro
+          try {
+            const userDoc = await db.collection('users').doc(uid).get();
+            const userData = userDoc.exists ? userDoc.data() : {};
+            const memberEmail = userData.email || '';
+            const memberName = userData.name || '';
+            if (memberEmail) {
+              sendEmail(memberEmail, 'Tu suscripción ha sido cancelada - Club Dermalysse',
+                emailTemplate('Suscripción cancelada',
+                  '<p>Hola ' + memberName + ',</p>' +
+                  '<p>Tu suscripción al Club Dermalysse ha sido cancelada.</p>' +
+                  '<p>Lamentamos verte partir. Si deseas regresar, puedes reactivar tu suscripción en cualquier momento desde el Club.</p>',
+                  'Volver al Club', 'https://teccapitalweb.github.io/Club-Dermalysse-main/')
+              );
+            }
+
+            // Enviar email al admin
+            sendEmail(ADMIN_EMAIL, 'Cancelación de suscripción - Club Dermalysse',
+              emailTemplate('Suscripción cancelada',
+                '<p><strong>' + (memberName || memberEmail || uid) + '</strong> ha cancelado su suscripción.</p>' +
+                '<p style="margin-top:1rem;"><strong>Email:</strong> ' + memberEmail + '<br><strong>Fecha:</strong> ' + new Date().toLocaleString('es-MX') + '</p>',
+                'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
+            );
+          } catch(e) { console.error('Cancel email error:', e); }
 
           // Registrar actividad
           try {
@@ -276,6 +363,28 @@ app.post('/cancel-subscription', async (req, res) => {
       cancelAtPeriodEnd: true,
       currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString()
     });
+
+    // Enviar emails de cancelación programada
+    try {
+      const memberEmail = userData.email || '';
+      const memberName = userData.name || '';
+      const endDate = new Date(sub.current_period_end * 1000).toLocaleDateString('es-MX', { day:'numeric', month:'long', year:'numeric' });
+      if (memberEmail) {
+        sendEmail(memberEmail, 'Cancelación programada - Club Dermalysse',
+          emailTemplate('Cancelación programada',
+            '<p>Hola ' + memberName + ',</p>' +
+            '<p>Tu suscripción ha sido marcada para cancelarse el <strong>' + endDate + '</strong>.</p>' +
+            '<p>Seguirás teniendo acceso completo hasta esa fecha. Si cambias de opinión, puedes reactivar tu suscripción en cualquier momento.</p>',
+            'Ir al Club', 'https://teccapitalweb.github.io/Club-Dermalysse-main/')
+        );
+      }
+      sendEmail(ADMIN_EMAIL, 'Cancelación programada - Club Dermalysse',
+        emailTemplate('Cancelación programada',
+          '<p><strong>' + (memberName || memberEmail || firebaseUid) + '</strong> ha programado la cancelación de su suscripción.</p>' +
+          '<p><strong>Acceso hasta:</strong> ' + endDate + '</p>',
+          'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
+      );
+    } catch(e) {}
   } catch (err) {
     console.error('Cancel subscription error:', err);
     res.status(500).json({ error: err.message });
