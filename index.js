@@ -67,6 +67,13 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             }
           }, { merge: true });
 
+          // Actualizar member doc con plan
+          try {
+            await db.collection('members').doc(uid).set({
+              plan: interval === 'year' ? 'Anual' : 'Mensual',
+              status: 'active'
+            }, { merge: true });
+          } catch(e) {}
           console.log('✅ Suscripción activada para:', uid, '- Plan:', interval);
         }
         break;
@@ -108,6 +115,13 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               updatedAt: new Date().toISOString()
             }
           }, { merge: true });
+          // Actualizar member doc
+          try {
+            await db.collection('members').doc(uid).set({
+              plan: 'Free',
+              status: 'paused'
+            }, { merge: true });
+          } catch(e) {}
           console.log('❌ Suscripción cancelada para:', uid);
         }
         break;
