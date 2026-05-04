@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin = require('firebase-admin');
-const nodemailer = require('nodemailer');
 
 // ═══ FIREBASE ADMIN ═══
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
@@ -11,30 +10,31 @@ admin.initializeApp({
 });
 const db = admin.firestore();
 
-// ═══ EMAIL (Gmail SMTP) ═══
+// ═══ EMAIL (Resend HTTP API) ═══
 const ADMIN_EMAIL = 'teccapitalweb@gmail.com';
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.GMAIL_USER || ADMIN_EMAIL,
-    pass: process.env.GMAIL_APP_PASSWORD
-  },
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 15000
-});
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
 async function sendEmail(to, subject, html) {
   try {
-    await transporter.sendMail({
-      from: '"Club Dermalysse" <' + ADMIN_EMAIL + '>',
-      to,
-      subject,
-      html
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + RESEND_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'Club Dermalysse <onboarding@resend.dev>',
+        to: [to],
+        subject,
+        html
+      })
     });
-    console.log('📧 Email enviado a:', to);
+    const data = await res.json();
+    if (data.id) {
+      console.log('📧 Email enviado a:', to, '- ID:', data.id);
+    } else {
+      console.error('Email error:', JSON.stringify(data));
+    }
   } catch(e) { console.error('Email error:', e.message); }
 }
 
