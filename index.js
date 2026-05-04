@@ -136,7 +136,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
                 '<p>Tu suscripción al <strong>Plan ' + planName + '</strong> ha sido activada exitosamente.</p>' +
                 '<p>Ya tienes acceso completo a todos los cursos, webinars en vivo, material PDF y la comunidad del Club Dermalysse.</p>' +
                 '<p style="margin-top:1rem;"><strong>Plan:</strong> ' + planName + '<br><strong>Estado:</strong> Activa</p>',
-                'Ir al Club', 'https://teccapitalweb.github.io/Club-Dermalysse-main/')
+                'Ir al Club', 'https://club.dermalyssemx.com/')
             );
           }
 
@@ -219,7 +219,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
                   '<p>Hola ' + memberName + ',</p>' +
                   '<p>Tu suscripción al Club Dermalysse ha sido cancelada.</p>' +
                   '<p>Lamentamos verte partir. Si deseas regresar, puedes reactivar tu suscripción en cualquier momento desde el Club.</p>',
-                  'Volver al Club', 'https://teccapitalweb.github.io/Club-Dermalysse-main/')
+                  'Volver al Club', 'https://club.dermalyssemx.com/')
               );
             }
 
@@ -325,8 +325,8 @@ app.post('/create-checkout-session', async (req, res) => {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       mode: 'subscription',
-      success_url: successUrl || 'https://teccapitalweb.github.io/Club-Dermalysse-main/?payment=success',
-      cancel_url: cancelUrl || 'https://teccapitalweb.github.io/Club-Dermalysse-main/?payment=canceled',
+      success_url: successUrl || 'https://club.dermalyssemx.com/?payment=success',
+      cancel_url: cancelUrl || 'https://club.dermalyssemx.com/?payment=canceled',
       metadata: { firebaseUid },
       subscription_data: {
         metadata: { firebaseUid }
@@ -385,7 +385,7 @@ app.post('/cancel-subscription', async (req, res) => {
             '<p>Hola ' + memberName + ',</p>' +
             '<p>Tu suscripción ha sido marcada para cancelarse el <strong>' + endDate + '</strong>.</p>' +
             '<p>Seguirás teniendo acceso completo hasta esa fecha. Si cambias de opinión, puedes reactivar tu suscripción en cualquier momento.</p>',
-            'Ir al Club', 'https://teccapitalweb.github.io/Club-Dermalysse-main/')
+            'Ir al Club', 'https://club.dermalyssemx.com/')
         );
       }
       sendEmail(ADMIN_EMAIL, 'Cancelación programada - Club Dermalysse',
@@ -439,7 +439,7 @@ app.post('/reactivate-subscription', async (req, res) => {
             '<p>Hola ' + (memberName || 'Miembro') + ',</p>' +
             '<p>Tu suscripción al Club Dermalysse ha sido reactivada exitosamente. Seguirás disfrutando de todos los beneficios del club.</p>' +
             '<p>¡Gracias por quedarte con nosotros!</p>',
-            'Ir al Club', 'https://teccapitalweb.github.io/Club-Dermalysse-main/')
+            'Ir al Club', 'https://club.dermalyssemx.com/')
         );
       }
       sendEmail(ADMIN_EMAIL, 'Suscripción reactivada - Club Dermalysse',
@@ -470,7 +470,7 @@ app.post('/create-portal-session', async (req, res) => {
 
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: returnUrl || 'https://teccapitalweb.github.io/Club-Dermalysse-main/'
+      return_url: returnUrl || 'https://club.dermalyssemx.com/'
     });
 
     res.json({ url: session.url });
