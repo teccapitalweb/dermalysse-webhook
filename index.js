@@ -10,30 +10,35 @@ admin.initializeApp({
 });
 const db = admin.firestore();
 
-// ═══ EMAIL (Resend HTTP API) ═══
+// ═══ EMAIL (EmailJS API — Club Dermalysse) ═══
 const ADMIN_EMAIL = 'teccapitalweb@gmail.com';
-const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const EMAILJS_SERVICE_ID = 'service_i8pm87h';
+const EMAILJS_TEMPLATE_ID = 'template_0xcszxa';
+const EMAILJS_PUBLIC_KEY = 'iIBc65PznIzD84KgR';
+const EMAILJS_PRIVATE_KEY = '75xg9N1EQU1Cy2MEfK75k';
 
 async function sendEmail(to, subject, html) {
   try {
-    const res = await fetch('https://api.resend.com/emails', {
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + RESEND_API_KEY,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'Club Dermalysse <onboarding@resend.dev>',
-        to: [to],
-        subject,
-        html
+        service_id: EMAILJS_SERVICE_ID,
+        template_id: EMAILJS_TEMPLATE_ID,
+        user_id: EMAILJS_PUBLIC_KEY,
+        accessToken: EMAILJS_PRIVATE_KEY,
+        template_params: {
+          to_email: to,
+          subject: subject,
+          message: html
+        }
       })
     });
-    const data = await res.json();
-    if (data.id) {
-      console.log('📧 Email enviado a:', to, '- ID:', data.id);
+    if (res.ok) {
+      console.log('📧 Email enviado a:', to);
     } else {
-      console.error('Email error:', JSON.stringify(data));
+      const text = await res.text();
+      console.error('Email error:', text);
     }
   } catch(e) { console.error('Email error:', e.message); }
 }
@@ -423,6 +428,27 @@ app.post('/reactivate-subscription', async (req, res) => {
     }, { merge: true });
 
     res.json({ success: true, cancelAtPeriodEnd: false });
+
+    // Enviar emails de reactivación
+    try {
+      const memberEmail = userData.email || '';
+      const memberName = userData.name || '';
+      if (memberEmail) {
+        sendEmail(memberEmail, 'Suscripción reactivada - Club Dermalysse',
+          emailTemplate('¡Tu suscripción está activa de nuevo!',
+            '<p>Hola ' + (memberName || 'Miembro') + ',</p>' +
+            '<p>Tu suscripción al Club Dermalysse ha sido reactivada exitosamente. Seguirás disfrutando de todos los beneficios del club.</p>' +
+            '<p>¡Gracias por quedarte con nosotros!</p>',
+            'Ir al Club', 'https://teccapitalweb.github.io/Club-Dermalysse-main/')
+        );
+      }
+      sendEmail(ADMIN_EMAIL, 'Suscripción reactivada - Club Dermalysse',
+        emailTemplate('Suscripción reactivada',
+          '<p><strong>' + (memberName || memberEmail || firebaseUid) + '</strong> ha reactivado su suscripción.</p>' +
+          '<p><strong>Fecha:</strong> ' + new Date().toLocaleString('es-MX') + '</p>',
+          'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
+      );
+    } catch(e) { console.error('Reactivate email error:', e); }
   } catch (err) {
     console.error('Reactivate error:', err);
     res.status(500).json({ error: err.message });
