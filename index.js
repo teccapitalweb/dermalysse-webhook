@@ -131,7 +131,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           const memberEmail = session.customer_details?.email || '';
           const planName = interval === 'year' ? 'Anual ($1,799 MXN/año)' : 'Mensual ($200 MXN/mes)';
           if (memberEmail) {
-            sendEmail(memberEmail, '¡Bienvenido/a al Club Dermalysse!',
+            sendEmail(memberEmail, '¡Bienvenido al Club Dermalysse!',
               emailTemplate('¡Gracias por suscribirte!',
                 '<p>Tu suscripción al <strong>Plan ' + planName + '</strong> ha sido activada exitosamente.</p>' +
                 '<p>Ya tienes acceso completo a todos los cursos, webinars en vivo, material PDF y la comunidad del Club Dermalysse.</p>' +
@@ -141,12 +141,12 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           }
 
           // Enviar email al admin
-          sendEmail(ADMIN_EMAIL, 'Nueva suscripción - Club Dermalysse',
+          setTimeout(function(){ sendEmail(ADMIN_EMAIL, 'Nueva suscripción - Club Dermalysse',
             emailTemplate('Nueva suscripción',
               '<p><strong>' + (memberEmail || uid) + '</strong> se ha suscrito al <strong>Plan ' + planName + '</strong>.</p>' +
               '<p style="margin-top:1rem;"><strong>ID de suscripción:</strong> ' + subscriptionId + '<br><strong>Fecha:</strong> ' + new Date().toLocaleString('es-MX') + '</p>',
               'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
-          );
+          ); }, 3000);
 
           // Registrar actividad
           try {
@@ -224,12 +224,12 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             }
 
             // Enviar email al admin
-            sendEmail(ADMIN_EMAIL, 'Cancelación de suscripción - Club Dermalysse',
+            setTimeout(function(){ sendEmail(ADMIN_EMAIL, 'Cancelación de suscripción - Club Dermalysse',
               emailTemplate('Suscripción cancelada',
                 '<p><strong>' + (memberName || memberEmail || uid) + '</strong> ha cancelado su suscripción.</p>' +
                 '<p style="margin-top:1rem;"><strong>Email:</strong> ' + memberEmail + '<br><strong>Fecha:</strong> ' + new Date().toLocaleString('es-MX') + '</p>',
                 'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
-            );
+            ); }, 3000);
           } catch(e) { console.error('Cancel email error:', e); }
 
           // Registrar actividad
@@ -388,12 +388,12 @@ app.post('/cancel-subscription', async (req, res) => {
             'Ir al Club', 'https://club.dermalyssemx.com/')
         );
       }
-      sendEmail(ADMIN_EMAIL, 'Cancelación programada - Club Dermalysse',
+      setTimeout(function(){ sendEmail(ADMIN_EMAIL, 'Cancelación programada - Club Dermalysse',
         emailTemplate('Cancelación programada',
           '<p><strong>' + (memberName || memberEmail || firebaseUid) + '</strong> ha programado la cancelación de su suscripción.</p>' +
           '<p><strong>Acceso hasta:</strong> ' + endDate + '</p>',
           'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
-      );
+      ); }, 3000);
     } catch(e) {}
   } catch (err) {
     console.error('Cancel subscription error:', err);
@@ -442,12 +442,12 @@ app.post('/reactivate-subscription', async (req, res) => {
             'Ir al Club', 'https://club.dermalyssemx.com/')
         );
       }
-      sendEmail(ADMIN_EMAIL, 'Suscripción reactivada - Club Dermalysse',
+      setTimeout(function(){ sendEmail(ADMIN_EMAIL, 'Suscripción reactivada - Club Dermalysse',
         emailTemplate('Suscripción reactivada',
           '<p><strong>' + (memberName || memberEmail || firebaseUid) + '</strong> ha reactivado su suscripción.</p>' +
           '<p><strong>Fecha:</strong> ' + new Date().toLocaleString('es-MX') + '</p>',
           'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
-      );
+      ); }, 3000);
     } catch(e) { console.error('Reactivate email error:', e); }
   } catch (err) {
     console.error('Reactivate error:', err);
