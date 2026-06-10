@@ -61,6 +61,31 @@ function emailTemplate(title, body, buttonText, buttonUrl) {
   </div>`;
 }
 
+// ═══ GUARDA: ignorar eventos de suscripciones viejas/abandonadas ═══
+// Evita que un evento tardío (de otra sub o de un estado "incomplete") pise
+// una suscripción ACTIVA ya guardada. No borra datos ni toca el happy path.
+async function _isStaleSubEvent(uid, eventSubId, incomingStatus) {
+  try {
+    const snap = await db.collection('users').doc(uid).get();
+    const stored = snap.exists ? (snap.data().subscription || {}) : {};
+    if (stored.status !== 'active') return false; // sin activa guardada: procesar normal
+    // 1) Match de suscripción: si el evento es de OTRA sub, ignorarlo
+    if (eventSubId && stored.stripeSubscriptionId && eventSubId !== stored.stripeSubscriptionId) {
+      console.log('⏭️  Evento ignorado (sub distinta a la activa):', eventSubId, 'vs', stored.stripeSubscriptionId);
+      return true;
+    }
+    // 2) No-downgrade: no dejar que un estado incompleto pise una activa
+    if (incomingStatus === 'incomplete' || incomingStatus === 'incomplete_expired') {
+      console.log('⏭️  Evento ignorado (downgrade incomplete sobre activa):', uid);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.error('Stale-check error:', e);
+    return false; // ante error, no bloquear (comportamiento previo)
+  }
+}
+
 const app = express();
 
 // ═══ CORS ═══
@@ -191,6 +216,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         const uid = sub.metadata?.firebaseUid;
 
         if (uid) {
+          if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
           await db.collection('users').doc(uid).set({
             subscription: {
               status: 'canceled',
@@ -252,6 +278,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         const uid = sub.metadata?.firebaseUid;
 
         if (uid) {
+          if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
           await db.collection('users').doc(uid).set({
             subscription: {
               status: sub.status === 'active' ? 'active' : sub.status,
@@ -275,6 +302,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         const uid = sub.metadata?.firebaseUid;
 
         if (uid) {
+          if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
           await db.collection('users').doc(uid).set({
             subscription: {
               status: 'past_due',
