@@ -595,6 +595,90 @@ app.get('/admin/resync-report', async (req, res) => {
   }
 });
 
+// ═══ RESYNC REAL (CORRIGE Firestore con datos de Stripe) ═══
+// Igual que el reporte, pero ESCRIBE. Solo toca socios cuya suscripción existe
+// en Stripe live y está desfasada (currentPeriodEnd o status). Los que no existen
+// en live (test mode) se saltan solos. Usa merge: NO borra ningún otro campo.
+// Requiere confirmación explícita. Uso:
+//   GET /admin/resync?token=TU_TOKEN&confirmar=si
+app.get('/admin/resync', async (req, res) => {
+  try {
+    const expected = process.env.ADMIN_RESYNC_TOKEN;
+    if (!expected) {
+      return res.status(500).json({ error: 'Falta configurar ADMIN_RESYNC_TOKEN en Railway' });
+    }
+    if (req.query.token !== expected) {
+      return res.status(401).json({ error: 'Token inválido' });
+    }
+    if (req.query.confirmar !== 'si') {
+      return res.status(400).json({ error: "Para aplicar la corrección agrega &confirmar=si a la URL. (Sin eso no se escribe nada.)" });
+    }
+
+    const snap = await db.collection('users').get();
+    const activos = snap.docs.filter(d => (d.data().subscription || {}).status === 'active');
+
+    const corregidos = [];
+    const yaCorrectos = [];
+    const omitidos = []; // no existen en Stripe live (test mode u otros)
+
+    for (const doc of activos) {
+      const data = doc.data();
+      const stored = data.subscription || {};
+      const subId = stored.stripeSubscriptionId;
+      if (!subId) { omitidos.push({ uid: doc.id, email: data.email || null, motivo: 'sin subId' }); continue; }
+
+      let sub;
+      try {
+        sub = await stripe.subscriptions.retrieve(subId);
+      } catch (e) {
+        omitidos.push({ uid: doc.id, email: data.email || null, motivo: 'no existe en Stripe live' });
+        continue;
+      }
+
+      const realEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+      const realStatus = sub.status === 'active' ? 'active' : sub.status;
+      const endDesfasado = realEnd && stored.currentPeriodEnd !== realEnd;
+      const statusDesfasado = stored.status !== realStatus;
+
+      if (!endDesfasado && !statusDesfasado) {
+        yaCorrectos.push({ uid: doc.id, email: data.email || null });
+        continue;
+      }
+
+      // Escribir SOLO los campos desfasados, con merge (no borra nada más)
+      await db.collection('users').doc(doc.id).set({
+        subscription: {
+          status: realStatus,
+          currentPeriodEnd: realEnd,
+          updatedAt: new Date().toISOString()
+        }
+      }, { merge: true });
+
+      corregidos.push({
+        uid: doc.id,
+        email: data.email || null,
+        antes: { status: stored.status || null, currentPeriodEnd: stored.currentPeriodEnd || null },
+        ahora: { status: realStatus, currentPeriodEnd: realEnd }
+      });
+    }
+
+    res.json({
+      modo: 'CORRECCIÓN APLICADA (merge, no se borró nada)',
+      totalActivos: activos.length,
+      resumen: {
+        corregidos: corregidos.length,
+        yaCorrectos: yaCorrectos.length,
+        omitidos: omitidos.length
+      },
+      corregidos,
+      omitidos
+    });
+  } catch (err) {
+    console.error('Resync error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ═══ HEALTH CHECK ═══
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'Dermalysse Webhook Server' });
