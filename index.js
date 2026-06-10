@@ -527,6 +527,74 @@ app.post('/check-subscription', async (req, res) => {
   }
 });
 
+// ═══ REPORTE DE RESYNC (SOLO LECTURA — no escribe nada en Firestore) ═══
+// Recorre los socios con subscription.status === 'active', consulta Stripe y
+// reporta cuáles tienen el currentPeriodEnd o el status desfasado vs Stripe.
+// Protegido con token. Uso:  GET /admin/resync-report?token=TU_TOKEN
+app.get('/admin/resync-report', async (req, res) => {
+  try {
+    const expected = process.env.ADMIN_RESYNC_TOKEN;
+    if (!expected) {
+      return res.status(500).json({ error: 'Falta configurar ADMIN_RESYNC_TOKEN en Railway' });
+    }
+    if (req.query.token !== expected) {
+      return res.status(401).json({ error: 'Token inválido' });
+    }
+
+    const snap = await db.collection('users').get();
+    const activos = snap.docs.filter(d => (d.data().subscription || {}).status === 'active');
+
+    const desfasados = [];
+    const sinSubId = [];
+    const noEnStripe = [];
+    let revisados = 0;
+
+    for (const doc of activos) {
+      const data = doc.data();
+      const stored = data.subscription || {};
+      const subId = stored.stripeSubscriptionId;
+      if (!subId) { sinSubId.push({ uid: doc.id, email: data.email || null }); continue; }
+
+      try {
+        const sub = await stripe.subscriptions.retrieve(subId);
+        revisados++;
+        const realEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+        const realStatus = sub.status;
+        const endDesfasado = realEnd && stored.currentPeriodEnd !== realEnd;
+        const statusDesfasado = realStatus !== 'active' || stored.status !== 'active';
+        if (endDesfasado || statusDesfasado) {
+          desfasados.push({
+            uid: doc.id,
+            email: data.email || null,
+            subId: subId,
+            firestore: { status: stored.status || null, currentPeriodEnd: stored.currentPeriodEnd || null },
+            stripe: { status: realStatus, currentPeriodEnd: realEnd }
+          });
+        }
+      } catch (e) {
+        noEnStripe.push({ uid: doc.id, email: data.email || null, subId: subId, error: e.message });
+      }
+    }
+
+    res.json({
+      modo: 'SOLO REPORTE (no se escribió nada)',
+      totalActivosEnFirestore: activos.length,
+      revisadosEnStripe: revisados,
+      resumen: {
+        desfasados: desfasados.length,
+        sinSubId: sinSubId.length,
+        noEnStripe: noEnStripe.length
+      },
+      desfasados,
+      sinSubId,
+      noEnStripe
+    });
+  } catch (err) {
+    console.error('Resync-report error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ═══ HEALTH CHECK ═══
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'Dermalysse Webhook Server' });
