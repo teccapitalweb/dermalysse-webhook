@@ -86,6 +86,22 @@ async function _isStaleSubEvent(uid, eventSubId, incomingStatus) {
   }
 }
 
+// ═══ FILTRO MULTI-PROYECTO ═══
+// Esta cuenta de Stripe es compartida por ~16 clubes distintos (FisioTeck,
+// IMDIIL, GlobalVet, IMDAC, etc). Stripe manda TODOS los eventos de la cuenta
+// a TODOS los webhooks registrados, sin importar qué producto se compró.
+// Sin este filtro, un pago de OTRO club (que también manda metadata.firebaseUid)
+// se procesa aquí como si fuera un suscriptor de Dermalysse y le dispara correo
+// de bienvenida/cancelación a un cliente que nunca pagó Dermalysse.
+const OWN_PRICE_IDS = [
+  process.env.STRIPE_PRICE_MENSUAL || 'price_1TUCnuA7If2CqXs9YlPUF14H',
+  process.env.STRIPE_PRICE_ANUAL   || 'price_1TUCpHA7If2CqXs9ChAd4a1p'
+];
+
+function isOwnPrice(priceId) {
+  return !!priceId && OWN_PRICE_IDS.includes(priceId);
+}
+
 const app = express();
 
 // ═══ CORS ═══
@@ -128,6 +144,12 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
           const priceId = sub.items.data[0]?.price?.id;
           const interval = sub.items.data[0]?.price?.recurring?.interval;
+
+          // ⛔ Filtro multi-proyecto: si el price no es de Dermalysse, ignorar
+          if (!isOwnPrice(priceId)) {
+            console.log('⏭️  Ignorado (price de otro proyecto):', priceId);
+            break;
+          }
 
           await db.collection('users').doc(uid).set({
             subscription: {
@@ -195,6 +217,13 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
         const uid = sub.metadata?.firebaseUid;
+        const priceId = sub.items?.data?.[0]?.price?.id;
+
+        // ⛔ Filtro multi-proyecto
+        if (!isOwnPrice(priceId)) {
+          console.log('⏭️  Ignorado (price de otro proyecto):', priceId);
+          break;
+        }
 
         if (uid) {
           await db.collection('users').doc(uid).set({
@@ -214,6 +243,13 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
       case 'customer.subscription.deleted': {
         const sub = event.data.object;
         const uid = sub.metadata?.firebaseUid;
+        const priceId = sub.items?.data?.[0]?.price?.id;
+
+        // ⛔ Filtro multi-proyecto
+        if (!isOwnPrice(priceId)) {
+          console.log('⏭️  Ignorado (price de otro proyecto):', priceId);
+          break;
+        }
 
         if (uid) {
           if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
@@ -276,6 +312,13 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
       case 'customer.subscription.updated': {
         const sub = event.data.object;
         const uid = sub.metadata?.firebaseUid;
+        const priceId = sub.items?.data?.[0]?.price?.id;
+
+        // ⛔ Filtro multi-proyecto
+        if (!isOwnPrice(priceId)) {
+          console.log('⏭️  Ignorado (price de otro proyecto):', priceId);
+          break;
+        }
 
         if (uid) {
           if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
@@ -300,6 +343,13 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
         const uid = sub.metadata?.firebaseUid;
+        const priceId = sub.items?.data?.[0]?.price?.id;
+
+        // ⛔ Filtro multi-proyecto
+        if (!isOwnPrice(priceId)) {
+          console.log('⏭️  Ignorado (price de otro proyecto):', priceId);
+          break;
+        }
 
         if (uid) {
           if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
