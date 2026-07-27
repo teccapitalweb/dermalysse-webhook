@@ -139,8 +139,12 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         if (uid && subscriptionId) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
           const interval = sub.items.data[0]?.price?.recurring?.interval;
-          const lineItems = session.line_items?.data || [];
-          const amount = lineItems[0]?.amount_total ? lineItems[0].amount_total / 100 : null;
+          // OJO: session.line_items NO viene en el payload del webhook (requiere expand).
+          // session.amount_total SÍ viene siempre (en centavos). Fallback: el precio
+          // de la suscripción recuperada de Stripe.
+          const amount = session.amount_total
+            ? session.amount_total / 100
+            : (sub.items.data[0]?.price?.unit_amount ? sub.items.data[0].price.unit_amount / 100 : null);
 
           await db.collection('users').doc(uid).set({
             subscription: {
@@ -164,9 +168,11 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           } catch(e) {}
           console.log('✅ Suscripción activada para:', uid, '- Plan:', interval);
 
-          // Enviar email al miembro (con precio dinámico)
+          // Enviar email al miembro (con precio dinámico; si no hay monto, sin cifra — nunca "$null")
           const memberEmail = session.customer_details?.email || '';
-          const planName = interval === 'year' ? `Anual ($${amount} MXN/año)` : `Mensual ($${amount} MXN/mes)`;
+          const _lblPeriodo = interval === 'year' ? 'año' : 'mes';
+          const _lblPlan = interval === 'year' ? 'Anual' : 'Mensual';
+          const planName = amount ? `${_lblPlan} ($${amount.toLocaleString('es-MX')} MXN/${_lblPeriodo})` : _lblPlan;
           if (memberEmail) {
             sendEmail(memberEmail, '¡Bienvenido al Club Dermalysse!',
               emailTemplate('¡Gracias por suscribirte!',
@@ -351,6 +357,11 @@ app.post('/create-checkout-session', async (req, res) => {
     const { precioMes, precioAno } = await leerPreciosConfig();
     const montoMXN = plan === 'mensual' ? precioMes : precioAno;
     const interval = plan === 'mensual' ? 'month' : 'year';
+
+    // Stripe rechaza cargos menores a $10 MXN — mejor avisar claro que fallar críptico
+    if (montoMXN < 10) {
+      return res.status(400).json({ error: 'El precio configurado ($' + montoMXN + ' MXN) es menor al mínimo de Stripe ($10 MXN). Revisa Configuración en el panel admin.' });
+    }
 
     // Buscar o crear customer de Stripe
     let customerId;
