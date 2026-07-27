@@ -62,19 +62,15 @@ function emailTemplate(title, body, buttonText, buttonUrl) {
 }
 
 // ═══ GUARDA: ignorar eventos de suscripciones viejas/abandonadas ═══
-// Evita que un evento tardío (de otra sub o de un estado "incomplete") pise
-// una suscripción ACTIVA ya guardada. No borra datos ni toca el happy path.
 async function _isStaleSubEvent(uid, eventSubId, incomingStatus) {
   try {
     const snap = await db.collection('users').doc(uid).get();
     const stored = snap.exists ? (snap.data().subscription || {}) : {};
-    if (stored.status !== 'active') return false; // sin activa guardada: procesar normal
-    // 1) Match de suscripción: si el evento es de OTRA sub, ignorarlo
+    if (stored.status !== 'active') return false;
     if (eventSubId && stored.stripeSubscriptionId && eventSubId !== stored.stripeSubscriptionId) {
       console.log('⏭️  Evento ignorado (sub distinta a la activa):', eventSubId, 'vs', stored.stripeSubscriptionId);
       return true;
     }
-    // 2) No-downgrade: no dejar que un estado incompleto pise una activa
     if (incomingStatus === 'incomplete' || incomingStatus === 'incomplete_expired') {
       console.log('⏭️  Evento ignorado (downgrade incomplete sobre activa):', uid);
       return true;
@@ -82,24 +78,25 @@ async function _isStaleSubEvent(uid, eventSubId, incomingStatus) {
     return false;
   } catch (e) {
     console.error('Stale-check error:', e);
-    return false; // ante error, no bloquear (comportamiento previo)
+    return false;
   }
 }
 
-// ═══ FILTRO MULTI-PROYECTO ═══
-// Esta cuenta de Stripe es compartida por ~16 clubes distintos (FisioTeck,
-// IMDIIL, GlobalVet, IMDAC, etc). Stripe manda TODOS los eventos de la cuenta
-// a TODOS los webhooks registrados, sin importar qué producto se compró.
-// Sin este filtro, un pago de OTRO club (que también manda metadata.firebaseUid)
-// se procesa aquí como si fuera un suscriptor de Dermalysse y le dispara correo
-// de bienvenida/cancelación a un cliente que nunca pagó Dermalysse.
-const OWN_PRICE_IDS = [
-  process.env.STRIPE_PRICE_MENSUAL || 'price_1TUCnuA7If2CqXs9YlPUF14H',
-  process.env.STRIPE_PRICE_ANUAL   || 'price_1TUCpHA7If2CqXs9ChAd4a1p'
-];
-
-function isOwnPrice(priceId) {
-  return !!priceId && OWN_PRICE_IDS.includes(priceId);
+// ═══ LEER PRECIOS DINÁMICOS DESDE FIRESTORE ═══
+// Este es el CAMBIO PRINCIPAL: en vez de usar Price IDs fijos,
+// leemos los precios de config/club cada vez que se crea un checkout.
+async function leerPreciosConfig() {
+  try {
+    const snap = await db.collection('config').doc('club').get();
+    const c = snap.exists ? snap.data() : {};
+    const precioMes = Number(c.precioMes) > 0 ? Number(c.precioMes) : 200;
+    const precioAno = Number(c.precioAno) > 0 ? Number(c.precioAno) : 1799;
+    console.log('📊 Precios cargados desde Firestore:', { precioMes, precioAno });
+    return { precioMes, precioAno };
+  } catch (e) {
+    console.error('Error leyendo precios config:', e);
+    return { precioMes: 200, precioAno: 1799 };
+  }
 }
 
 const app = express();
@@ -140,24 +137,18 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         const subscriptionId = session.subscription;
 
         if (uid && subscriptionId) {
-          // Obtener detalles de la suscripción
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
-          const priceId = sub.items.data[0]?.price?.id;
           const interval = sub.items.data[0]?.price?.recurring?.interval;
-
-          // ⛔ Filtro multi-proyecto: si el price no es de Dermalysse, ignorar
-          if (!isOwnPrice(priceId)) {
-            console.log('⏭️  Ignorado (price de otro proyecto):', priceId);
-            break;
-          }
+          const lineItems = session.line_items?.data || [];
+          const amount = lineItems[0]?.amount_total ? lineItems[0].amount_total / 100 : null;
 
           await db.collection('users').doc(uid).set({
             subscription: {
               status: 'active',
               stripeCustomerId: customerId,
               stripeSubscriptionId: subscriptionId,
-              priceId: priceId,
               plan: interval === 'year' ? 'anual' : 'mensual',
+              amountPaid: amount,
               currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString()),
               subscribedAt: new Date().toISOString(),
               cancelAtPeriodEnd: false,
@@ -165,7 +156,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             }
           }, { merge: true });
 
-          // Actualizar member doc con plan
           try {
             await db.collection('members').doc(uid).set({
               plan: interval === 'year' ? 'Anual' : 'Mensual',
@@ -174,9 +164,9 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           } catch(e) {}
           console.log('✅ Suscripción activada para:', uid, '- Plan:', interval);
 
-          // Enviar email al miembro
+          // Enviar email al miembro (con precio dinámico)
           const memberEmail = session.customer_details?.email || '';
-          const planName = interval === 'year' ? 'Anual ($1,799 MXN/año)' : 'Mensual ($200 MXN/mes)';
+          const planName = interval === 'year' ? `Anual ($${amount} MXN/año)` : `Mensual ($${amount} MXN/mes)`;
           if (memberEmail) {
             sendEmail(memberEmail, '¡Bienvenido al Club Dermalysse!',
               emailTemplate('¡Gracias por suscribirte!',
@@ -187,7 +177,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             );
           }
 
-          // Enviar email al admin
           setTimeout(function(){ sendEmail(ADMIN_EMAIL, 'Nueva suscripción - Club Dermalysse',
             emailTemplate('Nueva suscripción',
               '<p><strong>' + (memberEmail || uid) + '</strong> se ha suscrito al <strong>Plan ' + planName + '</strong>.</p>' +
@@ -195,7 +184,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
           ); }, 3000);
 
-          // Registrar actividad
           try {
             const memberDoc = await db.collection('members').doc(uid).get();
             const memberName = memberDoc.exists ? memberDoc.data().name : uid;
@@ -217,13 +205,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
         const uid = sub.metadata?.firebaseUid;
-        const priceId = sub.items?.data?.[0]?.price?.id;
-
-        // ⛔ Filtro multi-proyecto
-        if (!isOwnPrice(priceId)) {
-          console.log('⏭️  Ignorado (price de otro proyecto):', priceId);
-          break;
-        }
 
         if (uid) {
           await db.collection('users').doc(uid).set({
@@ -243,13 +224,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
       case 'customer.subscription.deleted': {
         const sub = event.data.object;
         const uid = sub.metadata?.firebaseUid;
-        const priceId = sub.items?.data?.[0]?.price?.id;
-
-        // ⛔ Filtro multi-proyecto
-        if (!isOwnPrice(priceId)) {
-          console.log('⏭️  Ignorado (price de otro proyecto):', priceId);
-          break;
-        }
 
         if (uid) {
           if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
@@ -260,7 +234,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               updatedAt: new Date().toISOString()
             }
           }, { merge: true });
-          // Actualizar member doc
+
           try {
             await db.collection('members').doc(uid).set({
               plan: 'Free',
@@ -269,7 +243,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           } catch(e) {}
           console.log('❌ Suscripción cancelada para:', uid);
 
-          // Enviar email al miembro
           try {
             const userDoc = await db.collection('users').doc(uid).get();
             const userData = userDoc.exists ? userDoc.data() : {};
@@ -285,7 +258,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               );
             }
 
-            // Enviar email al admin
             setTimeout(function(){ sendEmail(ADMIN_EMAIL, 'Cancelación de suscripción - Club Dermalysse',
               emailTemplate('Suscripción cancelada',
                 '<p><strong>' + (memberName || memberEmail || uid) + '</strong> ha cancelado su suscripción.</p>' +
@@ -294,7 +266,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             ); }, 3000);
           } catch(e) { console.error('Cancel email error:', e); }
 
-          // Registrar actividad
           try {
             const memberDoc = await db.collection('members').doc(uid).get();
             const memberName = memberDoc.exists ? memberDoc.data().name : uid;
@@ -308,17 +279,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         break;
       }
 
-      // ─── Suscripción actualizada (ej: marcada para cancelar al final del período) ───
+      // ─── Suscripción actualizada ───
       case 'customer.subscription.updated': {
         const sub = event.data.object;
         const uid = sub.metadata?.firebaseUid;
-        const priceId = sub.items?.data?.[0]?.price?.id;
-
-        // ⛔ Filtro multi-proyecto
-        if (!isOwnPrice(priceId)) {
-          console.log('⏭️  Ignorado (price de otro proyecto):', priceId);
-          break;
-        }
 
         if (uid) {
           if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
@@ -343,13 +307,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
         const uid = sub.metadata?.firebaseUid;
-        const priceId = sub.items?.data?.[0]?.price?.id;
-
-        // ⛔ Filtro multi-proyecto
-        if (!isOwnPrice(priceId)) {
-          console.log('⏭️  Ignorado (price de otro proyecto):', priceId);
-          break;
-        }
 
         if (uid) {
           if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
@@ -374,14 +331,26 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 // ═══ JSON parser (para las demás rutas) ═══
 app.use(express.json());
 
-// ═══ CREAR CHECKOUT SESSION ═══
+// ═══ CREAR CHECKOUT SESSION CON PRECIO DINÁMICO ═══
+// ¡CAMBIO PRINCIPAL! En vez de recibir un priceId fijo, ahora calculamos
+// el precio dinámicamente desde Firestore según el plan elegido.
 app.post('/create-checkout-session', async (req, res) => {
   try {
-    const { priceId, firebaseUid, email, successUrl, cancelUrl } = req.body;
+    const { plan, firebaseUid, email, successUrl, cancelUrl } = req.body;
 
-    if (!priceId || !firebaseUid) {
-      return res.status(400).json({ error: 'priceId y firebaseUid son requeridos' });
+    // Validar plan
+    if (!['mensual', 'anual'].includes(plan)) {
+      return res.status(400).json({ error: 'Plan inválido (mensual o anual)' });
     }
+
+    if (!firebaseUid) {
+      return res.status(400).json({ error: 'firebaseUid requerido' });
+    }
+
+    // ← LEE PRECIOS DEL ADMIN (dinámico desde Firestore)
+    const { precioMes, precioAno } = await leerPreciosConfig();
+    const montoMXN = plan === 'mensual' ? precioMes : precioAno;
+    const interval = plan === 'mensual' ? 'month' : 'year';
 
     // Buscar o crear customer de Stripe
     let customerId;
@@ -398,10 +367,21 @@ app.post('/create-checkout-session', async (req, res) => {
       customerId = customer.id;
     }
 
+    // ← PRECIO DINÁMICO: en vez de Price ID fijo, armamos el price_data aquí
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: [{
+        price_data: {
+          currency: 'mxn',
+          unit_amount: Math.round(montoMXN * 100),
+          recurring: { interval },
+          product_data: {
+            name: `Club Dermalysse · Plan ${plan === 'mensual' ? 'Mensual' : 'Anual'}`
+          }
+        },
+        quantity: 1
+      }],
       mode: 'subscription',
       success_url: successUrl || 'https://club.dermalyssemx.com/?payment=success',
       cancel_url: cancelUrl || 'https://club.dermalyssemx.com/?payment=canceled',
@@ -432,12 +412,10 @@ app.post('/cancel-subscription', async (req, res) => {
       return res.status(400).json({ error: 'No se encontró suscripción activa' });
     }
 
-    // Cancelar al final del período (no inmediatamente)
     const sub = await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: true
     });
 
-    // Actualizar Firestore
     await db.collection('users').doc(firebaseUid).set({
       subscription: {
         cancelAtPeriodEnd: true,
@@ -452,7 +430,6 @@ app.post('/cancel-subscription', async (req, res) => {
       currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString())
     });
 
-    // Enviar emails de cancelación programada
     try {
       const memberEmail = userData.email || '';
       const memberName = userData.name || '';
@@ -479,7 +456,7 @@ app.post('/cancel-subscription', async (req, res) => {
   }
 });
 
-// ═══ REACTIVAR SUSCRIPCIÓN (quitar cancelación pendiente) ═══
+// ═══ REACTIVAR SUSCRIPCIÓN ═══
 app.post('/reactivate-subscription', async (req, res) => {
   try {
     const { firebaseUid } = req.body;
@@ -493,7 +470,6 @@ app.post('/reactivate-subscription', async (req, res) => {
       return res.status(400).json({ error: 'No se encontró suscripción' });
     }
 
-    // Reactivar (quitar cancel_at_period_end)
     await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: false
     });
@@ -507,7 +483,6 @@ app.post('/reactivate-subscription', async (req, res) => {
 
     res.json({ success: true, cancelAtPeriodEnd: false });
 
-    // Enviar emails de reactivación
     try {
       const memberEmail = userData.email || '';
       const memberName = userData.name || '';
@@ -533,7 +508,7 @@ app.post('/reactivate-subscription', async (req, res) => {
   }
 });
 
-// ═══ CREAR PORTAL SESSION (para cancelar/gestionar suscripción) ═══
+// ═══ CREAR PORTAL SESSION ═══
 app.post('/create-portal-session', async (req, res) => {
   try {
     const { firebaseUid, returnUrl } = req.body;
@@ -577,165 +552,14 @@ app.post('/check-subscription', async (req, res) => {
   }
 });
 
-// ═══ REPORTE DE RESYNC (SOLO LECTURA — no escribe nada en Firestore) ═══
-// Recorre los socios con subscription.status === 'active', consulta Stripe y
-// reporta cuáles tienen el currentPeriodEnd o el status desfasado vs Stripe.
-// Protegido con token. Uso:  GET /admin/resync-report?token=TU_TOKEN
-app.get('/admin/resync-report', async (req, res) => {
-  try {
-    const expected = process.env.ADMIN_RESYNC_TOKEN;
-    if (!expected) {
-      return res.status(500).json({ error: 'Falta configurar ADMIN_RESYNC_TOKEN en Railway' });
-    }
-    if (req.query.token !== expected) {
-      return res.status(401).json({ error: 'Token inválido' });
-    }
-
-    const snap = await db.collection('users').get();
-    const activos = snap.docs.filter(d => (d.data().subscription || {}).status === 'active');
-
-    const desfasados = [];
-    const sinSubId = [];
-    const noEnStripe = [];
-    let revisados = 0;
-
-    for (const doc of activos) {
-      const data = doc.data();
-      const stored = data.subscription || {};
-      const subId = stored.stripeSubscriptionId;
-      if (!subId) { sinSubId.push({ uid: doc.id, email: data.email || null }); continue; }
-
-      try {
-        const sub = await stripe.subscriptions.retrieve(subId);
-        revisados++;
-        const realEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
-        const realStatus = sub.status;
-        const endDesfasado = realEnd && stored.currentPeriodEnd !== realEnd;
-        const statusDesfasado = realStatus !== 'active' || stored.status !== 'active';
-        if (endDesfasado || statusDesfasado) {
-          desfasados.push({
-            uid: doc.id,
-            email: data.email || null,
-            subId: subId,
-            firestore: { status: stored.status || null, currentPeriodEnd: stored.currentPeriodEnd || null },
-            stripe: { status: realStatus, currentPeriodEnd: realEnd }
-          });
-        }
-      } catch (e) {
-        noEnStripe.push({ uid: doc.id, email: data.email || null, subId: subId, error: e.message });
-      }
-    }
-
-    res.json({
-      modo: 'SOLO REPORTE (no se escribió nada)',
-      totalActivosEnFirestore: activos.length,
-      revisadosEnStripe: revisados,
-      resumen: {
-        desfasados: desfasados.length,
-        sinSubId: sinSubId.length,
-        noEnStripe: noEnStripe.length
-      },
-      desfasados,
-      sinSubId,
-      noEnStripe
-    });
-  } catch (err) {
-    console.error('Resync-report error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ═══ RESYNC REAL (CORRIGE Firestore con datos de Stripe) ═══
-// Igual que el reporte, pero ESCRIBE. Solo toca socios cuya suscripción existe
-// en Stripe live y está desfasada (currentPeriodEnd o status). Los que no existen
-// en live (test mode) se saltan solos. Usa merge: NO borra ningún otro campo.
-// Requiere confirmación explícita. Uso:
-//   GET /admin/resync?token=TU_TOKEN&confirmar=si
-app.get('/admin/resync', async (req, res) => {
-  try {
-    const expected = process.env.ADMIN_RESYNC_TOKEN;
-    if (!expected) {
-      return res.status(500).json({ error: 'Falta configurar ADMIN_RESYNC_TOKEN en Railway' });
-    }
-    if (req.query.token !== expected) {
-      return res.status(401).json({ error: 'Token inválido' });
-    }
-    if (req.query.confirmar !== 'si') {
-      return res.status(400).json({ error: "Para aplicar la corrección agrega &confirmar=si a la URL. (Sin eso no se escribe nada.)" });
-    }
-
-    const snap = await db.collection('users').get();
-    const activos = snap.docs.filter(d => (d.data().subscription || {}).status === 'active');
-
-    const corregidos = [];
-    const yaCorrectos = [];
-    const omitidos = []; // no existen en Stripe live (test mode u otros)
-
-    for (const doc of activos) {
-      const data = doc.data();
-      const stored = data.subscription || {};
-      const subId = stored.stripeSubscriptionId;
-      if (!subId) { omitidos.push({ uid: doc.id, email: data.email || null, motivo: 'sin subId' }); continue; }
-
-      let sub;
-      try {
-        sub = await stripe.subscriptions.retrieve(subId);
-      } catch (e) {
-        omitidos.push({ uid: doc.id, email: data.email || null, motivo: 'no existe en Stripe live' });
-        continue;
-      }
-
-      const realEnd = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
-      const realStatus = sub.status === 'active' ? 'active' : sub.status;
-      const endDesfasado = realEnd && stored.currentPeriodEnd !== realEnd;
-      const statusDesfasado = stored.status !== realStatus;
-
-      if (!endDesfasado && !statusDesfasado) {
-        yaCorrectos.push({ uid: doc.id, email: data.email || null });
-        continue;
-      }
-
-      // Escribir SOLO los campos desfasados, con merge (no borra nada más)
-      await db.collection('users').doc(doc.id).set({
-        subscription: {
-          status: realStatus,
-          currentPeriodEnd: realEnd,
-          updatedAt: new Date().toISOString()
-        }
-      }, { merge: true });
-
-      corregidos.push({
-        uid: doc.id,
-        email: data.email || null,
-        antes: { status: stored.status || null, currentPeriodEnd: stored.currentPeriodEnd || null },
-        ahora: { status: realStatus, currentPeriodEnd: realEnd }
-      });
-    }
-
-    res.json({
-      modo: 'CORRECCIÓN APLICADA (merge, no se borró nada)',
-      totalActivos: activos.length,
-      resumen: {
-        corregidos: corregidos.length,
-        yaCorrectos: yaCorrectos.length,
-        omitidos: omitidos.length
-      },
-      corregidos,
-      omitidos
-    });
-  } catch (err) {
-    console.error('Resync error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ═══ HEALTH CHECK ═══
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'Dermalysse Webhook Server' });
+  res.json({ status: 'ok', service: 'Dermalysse Webhook Server (con precios dinámicos)' });
 });
 
 // ═══ START ═══
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Dermalysse webhook server running on port ${PORT}`);
+  console.log('💡 Precios dinámicos habilitados (leer desde config/club en Firestore)');
 });
