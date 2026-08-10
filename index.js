@@ -150,6 +150,12 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
   console.log('📩 Stripe event:', event.type);
 
+  // ═══ IGNORAR EVENTOS DE TEST-MODE (no deben tocar Firestore de producción) ═══
+  if (!event.livemode) {
+    console.log('⏭️  Evento de test-mode ignorado:', event.type);
+    return res.status(200).send('test event ignored');
+  }
+
   try {
     switch (event.type) {
       // ─── Pago exitoso (checkout completado) ───
