@@ -82,6 +82,29 @@ async function _isStaleSubEvent(uid, eventSubId, incomingStatus) {
   }
 }
 
+// ═══ DEFENSA CONTAMINACIÓN CRUZADA (cuenta Stripe compartida entre ~16 clubes) ═══
+// Capa 1: metadata.source === 'dermalysse'.
+// Capa 2 (fallback si no hay source, ej. suscripciones creadas antes de este parche):
+// el producto de Dermalysse siempre se llama "Club Dermalysse · Plan ...", ya que
+// este webhook usa price_data dinámico (no Price IDs fijos) al crear el checkout.
+// Fail-open: si no se puede verificar por un error de red/API, se deja pasar el
+// evento para no bloquear pagos reales por un problema temporal de Stripe.
+async function _perteneceAEsteClub(metadataSource, sub) {
+  if (metadataSource) return metadataSource === 'dermalysse';
+  if (!sub) return true;
+  try {
+    const productRef = sub.items?.data?.[0]?.price?.product;
+    if (!productRef) return true;
+    const product = typeof productRef === 'string'
+      ? await stripe.products.retrieve(productRef)
+      : productRef;
+    return !!(product?.name && product.name.toLowerCase().includes('dermalysse'));
+  } catch (e) {
+    console.error('⚠️  Chequeo de producto falló, dejando pasar (fail-open):', e.message);
+    return true;
+  }
+}
+
 // ═══ LEER PRECIOS DINÁMICOS DESDE FIRESTORE ═══
 // Este es el CAMBIO PRINCIPAL: en vez de usar Price IDs fijos,
 // leemos los precios de config/club cada vez que se crea un checkout.
@@ -138,6 +161,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
         if (uid && subscriptionId) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
+          if (!(await _perteneceAEsteClub(session.metadata?.source, sub))) {
+            console.log('⏭️  checkout.session.completed ignorado (evento de otro club):', uid);
+            break;
+          }
           const interval = sub.items.data[0]?.price?.recurring?.interval;
           // OJO: session.line_items NO viene en el payload del webhook (requiere expand).
           // session.amount_total SÍ viene siempre (en centavos). Fallback: el precio
@@ -213,6 +240,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         const uid = sub.metadata?.firebaseUid;
 
         if (uid) {
+          if (!(await _perteneceAEsteClub(sub.metadata?.source, sub))) {
+            console.log('⏭️  invoice.payment_succeeded ignorado (evento de otro club):', uid);
+            break;
+          }
           await db.collection('users').doc(uid).set({
             subscription: {
               status: 'active',
@@ -232,6 +263,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         const uid = sub.metadata?.firebaseUid;
 
         if (uid) {
+          if (!(await _perteneceAEsteClub(sub.metadata?.source, sub))) {
+            console.log('⏭️  customer.subscription.deleted ignorado (evento de otro club):', uid);
+            break;
+          }
           if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
           await db.collection('users').doc(uid).set({
             subscription: {
@@ -291,6 +326,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         const uid = sub.metadata?.firebaseUid;
 
         if (uid) {
+          if (!(await _perteneceAEsteClub(sub.metadata?.source, sub))) {
+            console.log('⏭️  customer.subscription.updated ignorado (evento de otro club):', uid);
+            break;
+          }
           if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
           await db.collection('users').doc(uid).set({
             subscription: {
@@ -315,6 +354,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         const uid = sub.metadata?.firebaseUid;
 
         if (uid) {
+          if (!(await _perteneceAEsteClub(sub.metadata?.source, sub))) {
+            console.log('⏭️  invoice.payment_failed ignorado (evento de otro club):', uid);
+            break;
+          }
           if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
           await db.collection('users').doc(uid).set({
             subscription: {
@@ -396,9 +439,9 @@ app.post('/create-checkout-session', async (req, res) => {
       mode: 'subscription',
       success_url: successUrl || 'https://club.dermalyssemx.com/?payment=success',
       cancel_url: cancelUrl || 'https://club.dermalyssemx.com/?payment=canceled',
-      metadata: { firebaseUid },
+      metadata: { firebaseUid, source: 'dermalysse' },
       subscription_data: {
-        metadata: { firebaseUid }
+        metadata: { firebaseUid, source: 'dermalysse' }
       }
     });
 
