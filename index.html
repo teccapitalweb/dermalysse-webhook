@@ -1,0 +1,1739 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DERMALYSSE · Panel Admin</title>
+  <link rel="icon" type="image/png" href="img/logo.png">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900;1,9..40,400;1,9..40,600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cafe-deep:#553d2a;--cafe-dark:#69503c;--cafe-mid:#907761;--cafe-light:#ab9680;--cafe-pale:#c7b69f;
+      --crema-soft:#e3d7bf;--crema-main:#fff9e1;
+      --azul-dark:#2e5f7a;--azul-main:#5a96b5;--azul-light:#7db4cf;--azul-pale:#d4e8f2;--azul-ghost:#edf5fa;
+      --bg-base:#fffdf2;--bg-surface:#ffffff;--bg-elevated:#fff9e1;--bg-hover:#fdf7e6;
+      --text-primary:#2d1f12;--text-secondary:#69503c;--text-muted:#907761;
+      --border:#e3d7bf;--border-soft:#f2ead5;
+      --success:#6a8a4f;--success-soft:rgba(106,138,79,.12);
+      --danger:#c14545;--danger-soft:rgba(193,69,69,.10);
+      --warn:#d4a44c;--warn-soft:rgba(212,164,76,.12);
+      --info:#5a96b5;--info-soft:rgba(90,125,149,.10);
+      --admin-red:#d94545;
+      --font-display:'DM Sans',-apple-system,sans-serif;--font-body:'DM Sans',-apple-system,sans-serif;
+      --radius-sm:10px;--radius:14px;--radius-lg:22px;
+      --shadow-xs:0 1px 3px rgba(144,119,97,.06);--shadow:0 4px 20px rgba(144,119,97,.10);--shadow-lg:0 20px 50px rgba(144,119,97,.16);
+    }
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:var(--font-body);font-weight:500;background:var(--bg-base);color:var(--text-primary);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+    button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+    button{background:none;border:none;cursor:pointer}
+    a{color:inherit;text-decoration:none}
+
+    /* ═══ DARK MODE ═══ */
+    body.dark-mode{--bg-base:#1a1612;--bg-surface:#241f1a;--bg-elevated:#2e2820;--bg-hover:#352e25;--text-primary:#f5efe6;--text-secondary:#b8a898;--text-muted:#8a7a6a;--border:#3a3228;--border-soft:#2e2820;--azul-ghost:rgba(46,95,122,.15);--azul-pale:rgba(46,95,122,.25);--crema-soft:#3a3228;--crema-main:#2e2820}
+
+    /* ═══ SCREENS ═══ */
+    .screen{display:none;min-height:100vh}
+    .screen.active{display:block}
+
+    /* ═══ AUTH ═══ */
+    #authScreen.active{display:grid;place-items:center;min-height:100vh;padding:2rem;background:radial-gradient(circle at 30% 20%,rgba(46,95,122,.06),transparent 55%),linear-gradient(135deg,var(--crema-main),var(--bg-base))}
+    .auth-card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:3rem 2.75rem;width:100%;max-width:440px;box-shadow:var(--shadow-lg);text-align:center}
+    .auth-logo{width:56px;height:56px;margin:0 auto 1rem;display:grid;place-items:center;overflow:hidden}
+    .auth-logo img{width:100%;height:100%;object-fit:contain}
+    .admin-badge{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .85rem;background:var(--admin-red);color:white;border-radius:999px;font-size:.7rem;font-weight:700;letter-spacing:.22em;margin-bottom:1.25rem;box-shadow:0 4px 12px rgba(217,69,69,.30)}
+    .auth-title{font-size:1.8rem;font-weight:700;letter-spacing:-0.01em;margin-bottom:.3rem}
+    .auth-subtitle{color:var(--text-secondary);font-size:.9rem;margin-bottom:2rem}
+
+    .form-field{margin-bottom:1rem;text-align:left}
+    .form-field label{display:block;font-size:.7rem;color:var(--text-muted);letter-spacing:.22em;text-transform:uppercase;margin-bottom:.45rem;font-weight:600}
+    .form-field input{width:100%;padding:.85rem 1rem;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.92rem;font-weight:500;transition:all .15s}
+    .form-field input::placeholder{color:var(--text-muted);font-weight:400}
+    .form-field input:focus{outline:none;border-color:var(--azul-main);box-shadow:0 0 0 3px rgba(46,95,122,.12);background:var(--bg-elevated)}
+
+    .btn-primary{width:100%;padding:1rem;background:var(--text-primary);color:var(--crema-main);font-weight:600;font-size:.92rem;border-radius:var(--radius-sm);letter-spacing:.04em;transition:all .15s;margin-top:.5rem;box-shadow:0 6px 16px rgba(45,31,18,.18)}
+    .btn-primary:hover{background:#1a1610;transform:translateY(-1px);box-shadow:0 12px 28px rgba(45,31,18,.28)}
+
+    .btn-secondary{padding:.65rem 1.15rem;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:.85rem;font-weight:500;transition:all .2s}
+    .btn-secondary:hover{border-color:var(--azul-main);color:var(--azul-dark);background:var(--bg-elevated)}
+
+    .btn-add{display:inline-flex;align-items:center;gap:.5rem;padding:.7rem 1.25rem;background:var(--azul-dark);color:white;border-radius:var(--radius-sm);font-size:.88rem;font-weight:600;transition:all .15s;box-shadow:0 4px 14px rgba(46,95,122,.20)}
+    .btn-add:hover{background:#1e4a62;transform:translateY(-1px);box-shadow:0 10px 24px rgba(46,95,122,.30)}
+    .btn-add svg{width:16px;height:16px}
+
+    .auth-hint{margin-top:1.25rem;padding:.85rem;background:var(--bg-elevated);border:1px solid var(--border-soft);border-left:3px solid var(--admin-red);border-radius:var(--radius-sm);font-size:.82rem;color:var(--text-secondary);line-height:1.5;text-align:left}
+    .auth-hint strong{color:var(--admin-red);font-weight:700}
+
+    /* ═══ APP SHELL ═══ */
+    #appScreen.active{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+
+    /* Sidebar */
+    .sidebar{position:sticky;top:0;height:100vh;background:var(--bg-surface);border-right:1px solid var(--border-soft);display:flex;flex-direction:column;overflow-y:auto;padding:1.5rem 0}
+    .sidebar::-webkit-scrollbar{width:4px}
+    .sidebar::-webkit-scrollbar-thumb{background:var(--cafe-pale);border-radius:2px}
+
+    .sidebar-header{padding:0 1.5rem 1.25rem;border-bottom:1px solid var(--border-soft);margin-bottom:1.25rem}
+    .sidebar-admin-badge{display:inline-flex;align-items:center;gap:.4rem;padding:.28rem .7rem;background:var(--admin-red);color:white;border-radius:999px;font-size:.65rem;font-weight:700;letter-spacing:.22em;margin-bottom:1rem;box-shadow:0 3px 10px rgba(217,69,69,.28)}
+    .sidebar-logo{display:flex;align-items:center;gap:.7rem}
+    .sidebar-logo-dot{width:38px;height:38px;border-radius:8px;display:grid;place-items:center;overflow:hidden;flex-shrink:0}
+    .sidebar-logo-dot img{width:100%;height:100%;object-fit:contain}
+    .sidebar-logo-text{font-weight:600;letter-spacing:.22em;font-size:.86rem;color:var(--text-primary)}
+
+    .sidebar-section{padding:0 .85rem;margin-bottom:1.25rem}
+    .sidebar-label{padding:0 1rem .5rem;font-size:.65rem;color:var(--text-muted);letter-spacing:.28em;text-transform:uppercase;font-weight:600}
+
+    .nav-item{display:flex;align-items:center;gap:.85rem;padding:.7rem 1rem;border-radius:var(--radius-sm);color:var(--text-secondary);font-size:.88rem;font-weight:500;cursor:pointer;transition:all .15s;position:relative;margin-bottom:2px}
+    .nav-item:hover{background:var(--bg-hover);color:var(--text-primary)}
+    .nav-item.active{background:var(--bg-elevated);color:var(--azul-dark);font-weight:600}
+    .nav-item.active::before{content:'';position:absolute;left:-.85rem;top:50%;transform:translateY(-50%);width:3px;height:20px;background:var(--azul-dark);border-radius:2px}
+    .nav-item svg{width:17px;height:17px;flex-shrink:0;stroke-width:1.6}
+
+    .sidebar-footer{margin-top:auto;padding:1rem .85rem 0;border-top:1px solid var(--border-soft)}
+    .user-chip{display:flex;align-items:center;gap:.7rem;padding:.55rem .7rem;border-radius:var(--radius-sm)}
+    .user-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--azul-dark),var(--azul-main));display:grid;place-items:center;font-weight:700;color:white;font-size:.85rem;flex-shrink:0}
+    .user-name{font-size:.85rem;font-weight:600;color:var(--text-primary)}
+    .user-role{font-size:.7rem;color:var(--admin-red);font-weight:600;letter-spacing:.1em;text-transform:uppercase}
+    .logout-btn{width:100%;margin-top:.6rem;padding:.55rem;color:var(--text-muted);font-size:.78rem;font-weight:500;border-radius:var(--radius-sm);transition:all .15s;display:flex;align-items:center;justify-content:center;gap:.5rem}
+    .logout-btn:hover{background:var(--danger-soft);color:var(--danger)}
+
+    /* ═══ MAIN ═══ */
+    .app-main{min-height:100vh;background:var(--bg-base)}
+    .topbar{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:1rem;padding:1rem 2rem;background:rgba(255,253,242,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border-soft)}
+    .hamburger-btn{display:none;padding:.5rem;border-radius:var(--radius-sm);color:var(--text-secondary)}
+    body.dark-mode .topbar{background:rgba(26,22,18,.92);border-color:var(--border)}
+
+    .view{display:none;padding:2rem;max-width:1400px;animation:fadeSlide .15s ease}
+    .view.active{display:block}
+    @keyframes fadeSlide{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+    .view-header{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:2rem;flex-wrap:wrap;gap:1rem}
+    .view-title{font-size:2.2rem;font-weight:700;letter-spacing:-0.01em;line-height:1.1}
+    .view-subtitle{color:var(--text-secondary);font-size:.92rem}
+
+    /* ═══ KPIs ═══ */
+    .kpis-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin-bottom:2rem}
+    .kpi-card{background:var(--bg-surface);border:1px solid var(--border-soft);border-radius:var(--radius);padding:1.25rem 1.4rem;transition:all .15s;box-shadow:var(--shadow-xs)}
+    .kpi-card:hover{border-color:var(--azul-pale);transform:translateY(-2px);box-shadow:var(--shadow)}
+    .kpi-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem}
+    .kpi-label{font-size:.72rem;color:var(--text-muted);letter-spacing:.18em;text-transform:uppercase;font-weight:600}
+    .kpi-icon{width:34px;height:34px;border-radius:10px;background:var(--azul-ghost);color:var(--azul-dark);display:grid;place-items:center}
+    .kpi-icon svg{width:16px;height:16px;stroke-width:1.8}
+    .kpi-value{font-size:2rem;font-weight:800;letter-spacing:-0.02em;line-height:1}
+    .kpi-foot{display:flex;align-items:center;gap:.4rem;margin-top:.55rem;font-size:.78rem;color:var(--text-muted)}
+    .kpi-delta{display:inline-flex;align-items:center;gap:.2rem;padding:.15rem .45rem;border-radius:999px;font-size:.72rem;font-weight:600}
+    .kpi-delta.up{background:var(--success-soft);color:var(--success)}
+    .kpi-delta.down{background:var(--danger-soft);color:var(--danger)}
+
+    /* Dashboard grid */
+    .dash-grid{display:grid;grid-template-columns:2fr 1fr;gap:1.25rem}
+    .panel{background:var(--bg-surface);border:1px solid var(--border-soft);border-radius:var(--radius);padding:1.5rem 1.75rem;box-shadow:var(--shadow-xs)}
+    .panel-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
+    .panel-title{font-size:1.15rem;font-weight:700;letter-spacing:-0.01em}
+
+    /* Chart */
+    .chart-wrap{position:relative;height:200px;display:flex;align-items:flex-end;gap:.65rem;padding:1rem .5rem 0;border-left:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft)}
+    .chart-bar{flex:1;background:linear-gradient(to top,var(--azul-dark),var(--azul-main));border-radius:4px 4px 0 0;position:relative;transition:all .15s;cursor:pointer;min-height:8px}
+    .chart-bar:hover{background:linear-gradient(to top,#1e4a62,var(--azul-dark))}
+    .chart-bar::after{content:attr(data-value);position:absolute;top:-1.6rem;left:50%;transform:translateX(-50%);font-size:.7rem;color:var(--text-muted);font-weight:600}
+    .chart-labels{display:flex;gap:.65rem;padding:.5rem .5rem 0}
+    .chart-labels span{flex:1;text-align:center;font-size:.7rem;color:var(--text-muted);font-weight:500}
+
+    /* Activity */
+    .activity-list{display:flex;flex-direction:column;gap:0}
+    .activity-item{display:flex;gap:.85rem;padding:.85rem 0;border-bottom:1px solid var(--border-soft)}
+    .activity-item:last-child{border-bottom:none}
+    .activity-dot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0}
+    .activity-dot.blue{background:var(--azul-main)}
+    .activity-dot.green{background:var(--success)}
+    .activity-dot.orange{background:var(--warn)}
+    .activity-text{font-size:.88rem;color:var(--text-primary);font-weight:500;line-height:1.4}
+    .activity-text strong{font-weight:700}
+    .activity-time{font-size:.75rem;color:var(--text-muted);margin-top:.1rem}
+
+    /* ═══ DATA TABLE ═══ */
+    .data-table-wrap{background:var(--bg-surface);border:1px solid var(--border-soft);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow-xs)}
+    .data-table-toolbar{padding:1rem 1.5rem;display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--border-soft)}
+    .data-table-search{flex:1;min-width:200px;position:relative}
+    .data-table-search input{width:100%;padding:.6rem 1rem .6rem 2.5rem;background:var(--bg-elevated);border:1px solid var(--border-soft);border-radius:var(--radius-sm);font-size:.88rem;font-weight:500;transition:all .2s}
+    .data-table-search input:focus{outline:none;border-color:var(--azul-main)}
+    .data-table-search svg{position:absolute;left:.9rem;top:50%;transform:translateY(-50%);color:var(--text-muted);width:15px;height:15px}
+
+    .data-table{width:100%;border-collapse:collapse}
+    .data-table th{padding:.85rem 1.5rem;text-align:left;font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--text-muted);font-weight:700;background:var(--bg-elevated);border-bottom:1px solid var(--border-soft);white-space:nowrap}
+    .data-table td{padding:.9rem 1.5rem;font-size:.9rem;border-bottom:1px solid var(--border-soft);font-weight:500}
+    .data-table tr:last-child td{border-bottom:none}
+    .data-table tr:hover{background:var(--bg-hover)}
+
+    .badge{display:inline-flex;align-items:center;gap:.3rem;padding:.22rem .6rem;border-radius:999px;font-size:.72rem;font-weight:600}
+    .badge.success{background:var(--success-soft);color:var(--success)}
+    .badge.danger{background:var(--danger-soft);color:var(--danger)}
+    .badge.warn{background:var(--warn-soft);color:var(--warn)}
+    .badge.info{background:var(--info-soft);color:var(--info)}
+    .badge.neutral{background:var(--bg-elevated);color:var(--text-secondary)}
+
+    .action-btns{display:inline-flex;gap:.3rem}
+    .action-btn{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--text-muted);background:var(--bg-elevated);transition:all .2s}
+    .action-btn:hover{background:var(--azul-ghost);color:var(--azul-dark)}
+    .action-btn.danger:hover{background:var(--danger-soft);color:var(--danger)}
+    .action-btn svg{width:14px;height:14px;stroke-width:1.8}
+
+    .drive-input{border-left:3px solid #4285f4 !important;padding-left:1rem !important}
+    .drive-link{display:inline-flex;align-items:center;gap:.35rem;padding:.2rem .6rem;border-radius:999px;font-size:.72rem;font-weight:600;background:rgba(66,133,244,.08);color:#4285f4;cursor:pointer;transition:all .2s;text-decoration:none}
+    .drive-link:hover{background:rgba(66,133,244,.16)}
+    .drive-link svg{width:13px;height:13px}
+    .no-drive{font-size:.72rem;color:var(--text-muted);font-style:italic}
+
+    /* Lesson items in modal */
+    .lesson-item-row{background:var(--bg-elevated);border:1px solid var(--border-soft);border-radius:var(--radius-sm);padding:1rem 1.25rem;margin-bottom:.65rem;position:relative;animation:fadeIn .12s ease}
+    .lesson-item-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:.65rem}
+    .lesson-item-num{font-size:.72rem;letter-spacing:.18em;font-weight:700;color:var(--azul-dark);text-transform:uppercase}
+    .lesson-remove{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;color:var(--text-muted);background:var(--bg-surface);border:1px solid var(--border-soft);cursor:pointer;transition:all .15s;font-size:.7rem}
+    .lesson-remove:hover{background:var(--danger-soft);color:var(--danger);border-color:rgba(193,69,69,.25)}
+    .lesson-fields{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+    .lesson-fields input{padding:.55rem .75rem;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;font-size:.85rem;font-weight:500;transition:all .15s}
+    .lesson-fields input:focus{outline:none;border-color:var(--azul-main);box-shadow:0 0 0 2px rgba(46,95,122,.1)}
+    .lesson-fields input.full{grid-column:1/-1}
+    .lesson-fields .drive-input{border-left:3px solid #4285f4 !important;grid-column:1/-1}
+    .lesson-add-btn{width:100%;padding:.7rem;border:1px dashed var(--border);border-radius:var(--radius-sm);color:var(--azul-dark);font-size:.88rem;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;cursor:pointer;background:none;transition:all .15s}
+    .lesson-add-btn:hover{border-color:var(--azul-main);background:var(--azul-ghost)}
+    body.dark-mode .lesson-item-row{background:var(--bg-elevated);border-color:var(--border)}
+    body.dark-mode .lesson-fields input{background:var(--bg-surface);border-color:var(--border)}
+    @media(max-width:640px){.lesson-fields{grid-template-columns:1fr}}
+
+    /* Notif types grid */
+    .notif-types-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    .notif-type-card{display:flex;align-items:center;gap:1rem;padding:1.25rem 1.5rem;background:var(--bg-surface);border:1px solid var(--border-soft);border-radius:var(--radius);box-shadow:var(--shadow-xs);transition:all .15s}
+    .notif-type-card:hover{border-color:var(--azul-pale);transform:translateY(-2px);box-shadow:var(--shadow)}
+    .notif-type-icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex-shrink:0}
+    .notif-type-icon svg{width:20px;height:20px}
+    .notif-type-info{flex:1;min-width:0}
+    .notif-type-info h3{font-size:.95rem;font-weight:700;margin-bottom:.1rem}
+    .notif-type-info p{font-size:.78rem;color:var(--text-muted);line-height:1.35}
+    .notif-type-badge{display:flex;align-items:center;gap:.3rem;padding:.2rem .55rem;border-radius:999px;font-size:.7rem;font-weight:600}
+    body.dark-mode .notif-type-card{background:var(--bg-surface);border-color:var(--border)}
+    @media(max-width:768px){.notif-types-grid{grid-template-columns:1fr}}
+
+    /* ═══ MODAL ═══ */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(45,31,18,.55);backdrop-filter:blur(4px);display:none;align-items:flex-start;justify-content:center;padding:2rem 1rem;z-index:9990;overflow-y:auto;will-change:opacity}
+    .modal-backdrop.active{display:flex;animation:fadeIn .1s ease}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    .modal-card{background:var(--bg-surface);border-radius:var(--radius-lg);padding:2rem 2.25rem;width:100%;max-width:560px;box-shadow:var(--shadow-lg);position:relative;margin-top:2rem;will-change:transform,opacity;animation:modalIn .12s ease}
+    @keyframes modalIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+    .modal-close{position:absolute;top:1.25rem;right:1.25rem;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--text-muted);background:var(--bg-elevated);transition:all .2s}
+    .modal-close:hover{background:var(--danger-soft);color:var(--danger)}
+    .modal-close svg{width:16px;height:16px}
+    .modal-title{font-size:1.5rem;font-weight:700;margin-bottom:.3rem}
+    .modal-subtitle{color:var(--text-secondary);font-size:.88rem;margin-bottom:1.75rem}
+    .modal-footer{display:flex;gap:.6rem;justify-content:flex-end;margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border-soft)}
+    .socio-stat{display:flex;flex-direction:column;gap:.2rem;background:var(--bg-elevated);border-radius:var(--radius-sm);padding:.7rem .85rem}
+    .socio-stat-label{font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em}
+    .socio-stat span:last-child{font-weight:600;font-size:.9rem;color:var(--text-primary)}
+
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:.85rem}
+    .form-field select,.form-field textarea{width:100%;padding:.85rem 1rem;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:.92rem;font-weight:500;transition:all .15s}
+    .form-field select:focus,.form-field textarea:focus{outline:none;border-color:var(--azul-main);box-shadow:0 0 0 3px rgba(46,95,122,.12)}
+
+    /* ═══ SETTINGS ═══ */
+    .settings-group{background:var(--bg-surface);border:1px solid var(--border-soft);border-radius:var(--radius);padding:1.5rem 2rem;margin-bottom:1rem;box-shadow:var(--shadow-xs)}
+    .settings-row{display:flex;align-items:center;justify-content:space-between;padding:.9rem 0;border-bottom:1px solid var(--border-soft);gap:1rem}
+    .settings-row:last-child{border-bottom:none}
+    .settings-info h4{font-weight:600;font-size:.95rem;margin-bottom:.1rem}
+    .settings-info p{color:var(--text-muted);font-size:.82rem}
+    .toggle{position:relative;width:42px;height:24px;background:var(--border);border-radius:999px;cursor:pointer;transition:all .15s;flex-shrink:0}
+    .toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:all .15s;box-shadow:0 2px 4px rgba(0,0,0,.15)}
+    .toggle.active{background:var(--azul-dark)}
+    .toggle.active::after{left:21px}
+
+    /* ═══ TOAST ═══ */
+    .toast{position:fixed;bottom:1.5rem;right:1.5rem;padding:.95rem 1.25rem;background:var(--bg-surface);border:1px solid var(--border);border-left:3px solid var(--success);border-radius:var(--radius);color:var(--text-primary);font-size:.9rem;font-weight:600;box-shadow:var(--shadow-lg);transform:translateY(20px);opacity:0;transition:all .15s;z-index:9999;display:flex;align-items:center;gap:.6rem}
+    .toast.show{transform:translateY(0);opacity:1}
+    .toast svg{color:var(--success);width:18px;height:18px}
+
+    /* ═══ DARK MODE FIXES ═══ */
+    body.dark-mode .sidebar{background:var(--bg-surface);border-color:var(--border)}
+    body.dark-mode .kpi-card,body.dark-mode .panel,body.dark-mode .data-table-wrap,body.dark-mode .settings-group,body.dark-mode .auth-card,body.dark-mode .modal-card{background:var(--bg-surface);border-color:var(--border)}
+    body.dark-mode .data-table-search input,body.dark-mode .form-field input,body.dark-mode .form-field select,body.dark-mode .form-field textarea{background:var(--bg-elevated);border-color:var(--border)}
+    body.dark-mode .toast{background:var(--bg-surface);border-color:var(--border)}
+    body.dark-mode .btn-secondary{background:var(--bg-elevated);border-color:var(--border)}
+
+    .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(45,31,18,.45);backdrop-filter:blur(4px);z-index:150}
+    .sidebar-overlay.active{display:block}
+
+    /* ═══ RESPONSIVE ═══ */
+    @media(max-width:1100px){.dash-grid{grid-template-columns:1fr}}
+    @media(max-width:1024px){
+      #appScreen.active{grid-template-columns:1fr}
+      .sidebar{position:fixed;left:-280px;width:280px;z-index:200;transition:left .2s}
+      .sidebar.open{left:0;box-shadow:var(--shadow-lg)}
+      .hamburger-btn{display:grid;place-items:center}
+      .view{padding:1.5rem 1.25rem}
+      .view-title{font-size:1.7rem}
+      .form-row{grid-template-columns:1fr}
+    }
+    @media(max-width:640px){.kpis-grid{grid-template-columns:1fr 1fr}}
+  </style>
+
+  <!-- FIREBASE SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script>
+    const firebaseConfig={apiKey:"AIzaSyC3EQ9hcS7wusPAgmL3LvCyB_QV_kpIP4g",authDomain:"club-dermalysse.firebaseapp.com",projectId:"club-dermalysse",storageBucket:"club-dermalysse.firebasestorage.app",messagingSenderId:"1075584613391",appId:"1:1075584613391:web:71abdd47c4364a27daf77a"};
+    const firebaseApp=firebase.initializeApp(firebaseConfig);
+    const auth=firebase.auth();
+    const db=firebase.firestore();
+    const googleProvider=new firebase.auth.GoogleAuthProvider();
+  </script>
+</head>
+<body>
+
+  <!-- ═══════════════════ AUTH ═══════════════════ -->
+  <div class="screen active" id="authScreen">
+    <div class="auth-card">
+      <div class="auth-logo"><img src="img/logo.png" alt="Dermalysse"></div>
+      <div class="admin-badge">ADMINISTRADOR</div>
+      <h1 class="auth-title">Panel de Gestión</h1>
+      <p class="auth-subtitle">Administra el Club de Miembros Dermalysse.</p>
+      <div class="form-field"><label>Correo electrónico</label><input type="email" id="loginEmail" placeholder="admin@dermalysse.com"></div>
+      <div class="form-field"><label>Contraseña</label><input type="password" id="loginPassword" placeholder="••••••••"></div>
+      <button type="button" class="btn-primary" onclick="handleLogin()">Entrar al panel</button>
+      <div style="display:flex;align-items:center;gap:.75rem;margin:1rem 0;"><div style="flex:1;height:1px;background:var(--border);"></div><span style="font-size:.82rem;color:var(--text-secondary);">o</span><div style="flex:1;height:1px;background:var(--border);"></div></div>
+      <button type="button" onclick="handleGoogleLoginAdmin()" style="width:100%;padding:.75rem 1.5rem;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-surface);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.6rem;font-family:inherit;font-size:.9rem;font-weight:600;color:var(--text-primary);">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#34A853" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#FBBC05" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Continuar con Google</button>
+      <div class="auth-hint">Solo administradores autorizados pueden acceder.</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ APP ═══════════════════ -->
+  <div class="screen" id="appScreen">
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-admin-badge">ADMINISTRADOR</div>
+        <div class="sidebar-logo">
+          <div class="sidebar-logo-dot"><img src="img/logo.png" alt="Dermalysse"></div>
+          <div class="sidebar-logo-text">DERMALYSSE</div>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">GENERAL</div>
+        <a class="nav-item active" data-view="dashboard" onclick="goTo('dashboard')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Dashboard
+        </a>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">CONTENIDO</div>
+        <a class="nav-item" data-view="cursos" onclick="goTo('cursos')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/></svg> Cursos</a>
+        <a class="nav-item" data-view="webinars" onclick="goTo('webinars')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg> Webinars</a>
+        <a class="nav-item" data-view="pdfs" onclick="goTo('pdfs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg> Material PDF</a>
+        <a class="nav-item" data-view="noticias" onclick="goTo('noticias')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 8h10M7 12h10M7 16h6"/></svg> Noticias</a>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-label">GESTIÓN</div>
+        <a class="nav-item" data-view="miembros" onclick="goTo('miembros')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Miembros</a>
+        <a class="nav-item" data-view="notificaciones" onclick="goTo('notificaciones')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg> Notificaciones</a>
+        <a class="nav-item" data-view="atlas" onclick="goTo('atlas')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Atlas Visual</a>
+        <a class="nav-item" data-view="config" onclick="goTo('config')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Configuración</a>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="user-chip">
+          <div class="user-avatar">AD</div>
+          <div>
+            <div class="user-name">Administrador</div>
+            <div class="user-role">Acceso total</div>
+          </div>
+        </div>
+        <button class="logout-btn" onclick="logout()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Cerrar sesión
+        </button>
+      </div>
+    </aside>
+
+    <main class="app-main">
+      <header class="topbar">
+        <button class="hamburger-btn" onclick="openSidebar()" style="padding:.5rem;border-radius:var(--radius-sm);color:var(--text-secondary);">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div style="flex:1;"></div>
+        <button class="btn-secondary" onclick="toggleDarkMode()" style="padding:.5rem .85rem;font-size:.82rem;display:inline-flex;align-items:center;gap:.4rem;">
+          <svg id="darkIcon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <span id="darkLabel">Oscuro</span>
+        </button>
+      </header>
+
+      <!-- ═══ DASHBOARD ═══ -->
+      <section class="view active" id="view-dashboard">
+        <div class="view-header"><div><h1 class="view-title">Dashboard</h1><p class="view-subtitle">Resumen general del Club de Miembros.</p></div></div>
+        <div class="kpis-grid" id="kpisGrid"></div>
+        <div class="dash-grid">
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">Inscripciones mensuales</div></div>
+            <div class="chart-wrap" id="chartBars"></div>
+            <div class="chart-labels" id="chartLabels"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">Actividad reciente</div></div>
+            <div class="activity-list" id="activityList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ CURSOS ═══ -->
+      <section class="view" id="view-cursos">
+        <div class="view-header">
+          <div><h1 class="view-title">Cursos</h1><p class="view-subtitle">Gestiona los cursos grabados del club.</p></div>
+          <div style="display:flex;gap:.65rem;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="btn-secondary" id="syncBunnyBtn" onclick="sincronizarBunnyDermalysse()">Sincronizar videos Bunny</button>
+            <button class="btn-add" onclick="openModal('cursoModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nuevo curso</button>
+          </div>
+        </div>
+        <div class="data-table-wrap"><div class="data-table-toolbar"><div class="data-table-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Buscar curso..." oninput="renderCursos(this.value)"></div></div><table class="data-table"><thead><tr><th>Curso</th><th>Categoría</th><th>Nivel</th><th>Clases</th><th>Temario</th><th>Portada</th><th>Estado</th><th></th></tr></thead><tbody id="cursosBody"></tbody></table></div>
+      </section>
+
+      <!-- ═══ WEBINARS ═══ -->
+      <section class="view" id="view-webinars">
+        <div class="view-header">
+          <div><h1 class="view-title">Webinars</h1><p class="view-subtitle">Programa y gestiona webinars en vivo.</p></div>
+          <button class="btn-add" onclick="openModal('webinarModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nuevo webinar</button>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Webinar</th><th>Fecha</th><th>Ponente</th><th>CV</th><th>En vivo</th><th>Grabación</th><th>Estado</th><th></th></tr></thead><tbody id="webinarsBody"></tbody></table></div>
+      </section>
+
+      <!-- ═══ PDFS ═══ -->
+      <section class="view" id="view-pdfs">
+        <div class="view-header">
+          <div><h1 class="view-title">Material PDF</h1><p class="view-subtitle">Administra guías y material descargable.</p></div>
+          <button class="btn-add" onclick="openModal('pdfModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nuevo PDF</button>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Material</th><th>Categoría</th><th>Páginas</th><th>Drive</th><th>Portada</th><th>Descargas</th><th></th></tr></thead><tbody id="pdfsBody"></tbody></table></div>
+      </section>
+
+      <!-- ═══ NOTICIAS ═══ -->
+      <section class="view" id="view-noticias">
+        <div class="view-header">
+          <div><h1 class="view-title">Noticias</h1><p class="view-subtitle">Publica noticias y actualizaciones.</p></div>
+          <button class="btn-add" onclick="openModal('noticiaModal')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nueva noticia</button>
+        </div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Noticia</th><th>Categoría</th><th>Autor</th><th>Imagen</th><th>Estado</th><th></th></tr></thead><tbody id="noticiasBody"></tbody></table></div>
+      </section>
+
+      <!-- ═══ MIEMBROS ═══ -->
+      <section class="view" id="view-miembros">
+        <div class="view-header">
+          <div><h1 class="view-title">Miembros</h1><p class="view-subtitle">Administra los miembros del club.</p></div>
+        </div>
+        <div class="data-table-wrap"><div class="data-table-toolbar"><div class="data-table-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Buscar miembro..." oninput="renderMiembros(this.value)"></div></div><table class="data-table"><thead><tr><th>Miembro</th><th>Plan</th><th>Estado</th><th>Desde</th><th>Cursos</th><th></th></tr></thead><tbody id="miembrosBody"></tbody></table></div>
+      </section>
+
+      <!-- ═══ NOTIFICACIONES ═══ -->
+      <section class="view" id="view-notificaciones">
+        <div class="view-header"><div><h1 class="view-title">Notificaciones</h1><p class="view-subtitle">Envía notificaciones a todos los miembros del club.</p></div></div>
+
+        <div class="notif-types-grid">
+          <div class="notif-type-card">
+            <div class="notif-type-icon" style="background:var(--info-soft);color:var(--info);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/></svg>
+            </div>
+            <div class="notif-type-info">
+              <h3>Nuevos cursos</h3>
+              <p>Avisar cuando se suba un nuevo curso</p>
+            </div>
+            <button class="btn-add" style="padding:.55rem 1rem;font-size:.82rem;" onclick="openNotifModal('curso')">Enviar</button>
+          </div>
+
+          <div class="notif-type-card">
+            <div class="notif-type-icon" style="background:var(--success-soft);color:var(--success);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none"/></svg>
+            </div>
+            <div class="notif-type-info">
+              <h3>Clases en vivo</h3>
+              <p>Recordatorio 30 minutos antes de cada sesión</p>
+            </div>
+            <button class="btn-add" style="padding:.55rem 1rem;font-size:.82rem;" onclick="openNotifModal('vivo')">Enviar</button>
+          </div>
+
+          <div class="notif-type-card">
+            <div class="notif-type-icon" style="background:var(--warn-soft);color:var(--warn);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            </div>
+            <div class="notif-type-info">
+              <h3>Nuevos PDFs</h3>
+              <p>Aviso cuando se publique nuevo material</p>
+            </div>
+            <button class="btn-add" style="padding:.55rem 1rem;font-size:.82rem;" onclick="openNotifModal('pdf')">Enviar</button>
+          </div>
+
+          <div class="notif-type-card">
+            <div class="notif-type-icon" style="background:var(--danger-soft);color:var(--danger);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            </div>
+            <div class="notif-type-info">
+              <h3>Promociones</h3>
+              <p>Ofertas especiales y descuentos del Club</p>
+            </div>
+            <button class="btn-add" style="padding:.55rem 1rem;font-size:.82rem;" onclick="openNotifModal('promo')">Enviar</button>
+          </div>
+        </div>
+
+        <div style="margin-top:2rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+            <h2 style="font-size:1.15rem;font-weight:700;">Historial de envíos</h2>
+            <span class="badge neutral" id="notifHistCount">0 enviadas</span>
+          </div>
+          <div class="data-table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Tipo</th><th>Título</th><th>Mensaje</th><th>Destinatarios</th><th>Fecha</th></tr></thead>
+              <tbody id="notifHistBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+  
+    <!-- ═══ ATLAS ═══ -->
+    <section class="view" id="view-atlas">
+      <div class="section-header">
+        <div><h1>Atlas Visual</h1><p class="section-subtitle">Gestiona las condiciones dermatológicas del atlas.</p></div>
+        <button class="btn-primary" onclick="openAtlasForm()">+ Nueva condición</button>
+      </div>
+      <div class="data-table-wrap">
+        <table class="data-table"><thead><tr><th>Condición</th><th>Categoría</th><th>Fotos</th><th>Tags</th><th></th></tr></thead>
+        <tbody id="atlasTableBody"></tbody></table>
+      </div>
+    </section>
+    <!-- ═══ CONFIG ═══ -->
+      <section class="view" id="view-config">
+        <div class="view-header"><div><h1 class="view-title">Configuración</h1><p class="view-subtitle">Ajustes del panel de administración.</p></div></div>
+        <div class="settings-group">
+          <h3 style="font-weight:700;margin-bottom:1rem;">💰 Precios de la Membresía</h3>
+          <p style="font-size:.88rem;color:var(--text-secondary);margin-bottom:1rem;line-height:1.6">Los precios dinámicos se reflejan en vivo en la plataforma y en los checkout de Stripe. Cambiar estos valores aplica automáticamente a los nuevos pagos. Solo afecta a <strong>nuevas suscripciones</strong> — a quien ya está suscrito no se le cambia el cobro. Mínimo $10 MXN (límite de Stripe).</p>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Precio mensual (MXN)</label>
+              <input type="number" id="cfg-precio-mes" min="10" value="200" style="width:100%;padding:.85rem 1rem;background:var(--bg-elevated);border:1px solid var(--border-soft);border-radius:var(--radius-sm);font-size:.92rem;font-weight:500;">
+            </div>
+            <div class="form-field">
+              <label>Precio anual (MXN)</label>
+              <input type="number" id="cfg-precio-ano" min="10" value="1799" style="width:100%;padding:.85rem 1rem;background:var(--bg-elevated);border:1px solid var(--border-soft);border-radius:var(--radius-sm);font-size:.92rem;font-weight:500;">
+            </div>
+          </div>
+          <button class="btn-add" style="margin-top:.75rem;" onclick="guardarConfiguracionPrecios()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Guardar configuración</button>
+        </div>
+        <div class="settings-group">
+          <h3 style="font-weight:700;margin-bottom:1rem;">Notificaciones</h3>
+          <div class="settings-row"><div class="settings-info"><h4>Nuevo miembro registrado</h4><p>Recibir alerta por cada nuevo registro</p></div><div class="toggle active" id="cfgNotifNewMember" onclick="toggleAdminConfig('notifNewMember',this)"></div></div>
+
+        </div>
+        <div class="settings-group">
+          <h3 style="font-weight:700;margin-bottom:1rem;">Plataforma</h3>
+          <div class="settings-row"><div class="settings-info"><h4>Modo mantenimiento</h4><p>Desactiva acceso al club temporalmente</p></div><div class="toggle" id="cfgMaintenance" onclick="toggleAdminConfig('maintenance',this)"></div></div>
+        </div>
+      </section>
+
+    </main>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+  </div>
+
+  <!-- MODALS -->
+  <!-- MODIFICADO: modal de ficha de socio + regalar días -->
+  <div class="modal-backdrop" id="socioModal" onclick="if(event.target===this)closeModals()">
+    <div class="modal-card" style="max-width:480px;">
+      <button class="modal-close" onclick="closeModals()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <div style="display:flex;align-items:center;gap:.85rem;margin-bottom:1.5rem;">
+        <div class="user-avatar" id="socioAvatar" style="width:52px;height:52px;font-size:1.1rem;">?</div>
+        <div><div class="modal-title" id="socioName" style="font-size:1.25rem;margin-bottom:.15rem;">Socio</div><div style="font-size:.82rem;color:var(--text-muted);" id="socioEmail">—</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1.5rem;">
+        <div class="socio-stat"><span class="socio-stat-label">Plan</span><span id="socioPlan">—</span></div>
+        <div class="socio-stat"><span class="socio-stat-label">Estado</span><span id="socioEstado">—</span></div>
+        <div class="socio-stat"><span class="socio-stat-label">Inscripción (Stripe)</span><span id="socioInscripcion">—</span></div>
+        <div class="socio-stat"><span class="socio-stat-label">Próximo cobro</span><span id="socioCobro">—</span></div>
+        <div class="socio-stat" style="grid-column:1/-1;"><span class="socio-stat-label">Acceso de cortesía vigente hasta</span><span id="socioVigencia">Sin regalo activo</span></div>
+      </div>
+      <div style="border-top:1px solid var(--border-soft);padding-top:1.25rem;">
+        <div style="font-weight:600;font-size:.92rem;margin-bottom:.15rem;">Regalar días de acceso</div>
+        <div style="font-size:.8rem;color:var(--text-muted);margin-bottom:.85rem;">Extiende el acceso sin tocar su suscripción de Stripe.</div>
+        <div style="display:flex;gap:.6rem;">
+          <button class="btn-add" style="flex:1;justify-content:center;" onclick="regalarDias(7)">+7 días</button>
+          <button class="btn-add" style="flex:1;justify-content:center;" onclick="regalarDias(15)">+15 días</button>
+          <button class="btn-add" style="flex:1;justify-content:center;" onclick="regalarDias(30)">+30 días</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="cursoModal" onclick="if(event.target===this)closeModals()">
+    <div class="modal-card" style="max-width:640px;">
+      <button class="modal-close" onclick="closeModals()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <div class="modal-title">Nuevo curso</div>
+      <div class="modal-subtitle">Completa la información del curso y agrega sus clases.</div>
+      <div class="form-field"><label>Nombre del curso</label><input id="mCursoName" placeholder="Ej: Fundamentos de Dermatología"></div>
+      <div class="form-field"><label>Descripción</label><textarea id="mCursoDesc" rows="2" placeholder="Breve descripción del contenido del curso..."></textarea></div>
+      <div class="form-row"><div class="form-field"><label>Categoría</label><select id="mCursoCat"><option>Dermatología</option><option>Estética</option><option>Cosmetología</option><option>Nutrición</option></select></div><div class="form-field"><label>Nivel</label><select id="mCursoLevel"><option>Básico</option><option>Intermedio</option><option>Avanzado</option></select></div></div>
+      <div class="form-row"><div class="form-field"><label>Instructor</label><input id="mCursoInst" placeholder="Dr. Nombre"></div><div class="form-field"><label>Estado</label><select id="mCursoStatus"><option value="published">Publicado</option><option value="draft">Borrador</option></select></div></div>
+      <div class="form-row"><div class="form-field"><label>Liberación</label><select id="mCursoRelease" onchange="toggleReleaseFields()"><option value="immediate">Inmediato</option><option value="drip">Goteo (cada 15 días)</option><option value="scheduled">Fecha fija</option></select></div><div class="form-field" id="dripOrderField" style="display:none;"><label>Orden (1, 2, 3...)</label><input id="mCursoOrder" type="number" min="1" placeholder="1"></div><div class="form-field" id="scheduledDateField" style="display:none;"><label>Fecha de apertura</label><input id="mCursoUnlockDate" type="date"></div></div>
+      <div class="form-field"><label>📋 Temario del curso (Google Drive)</label><input id="mCursoTemario" placeholder="https://drive.google.com/file/d/..." class="drive-input" style="border-left-color:#34a853 !important;"></div>
+      <div class="form-field"><label>🖼️ Imagen de portada (Google Drive)</label><input id="mCursoImg" placeholder="https://drive.google.com/file/d/..." class="drive-input"></div>
+
+      <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border-soft);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+          <label class="tool-label" style="margin:0;">📹 CLASES DEL CURSO</label>
+          <span style="font-size:.78rem;color:var(--text-muted);" id="mClaseCount">0 clases</span>
+        </div>
+        <div id="mClasesList"></div>
+        <button type="button" class="lesson-add-btn" onclick="addClaseField()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Agregar clase
+        </button>
+      </div>
+
+      <div class="modal-footer"><button class="btn-secondary" onclick="closeModals()">Cancelar</button><button class="btn-add" onclick="addCurso()">Crear curso</button></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="webinarModal" onclick="if(event.target===this)closeModals()">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeModals()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <div class="modal-title">Nuevo webinar</div>
+      <div class="modal-subtitle">Programa un webinar en vivo.</div>
+      <div class="form-field"><label>Título</label><input id="mWebTitle" placeholder="Ej: Peelings químicos avanzados"></div>
+      <div class="form-row"><div class="form-field"><label>Fecha y hora</label><input id="mWebDate" type="datetime-local"></div><div class="form-field"><label>Duración</label><input id="mWebDur" placeholder="60 min"></div></div>
+      <div class="form-field"><label>Ponente</label><input id="mWebSpeaker" placeholder="Dr. Nombre"></div>
+      <div class="form-field"><label>📄 CV del ponente (Google Drive)</label><input id="mWebCV" placeholder="https://drive.google.com/file/d/..." class="drive-input" style="border-left-color:#34a853 !important;"></div>
+      <div class="form-field"><label>🔗 Link para unirse al webinar en vivo (Zoom, Meet, Teams, etc.)</label><input id="mWebLive" placeholder="https://zoom.us/j/..." class="drive-input" style="border-left-color:#2e5f7a !important;"></div>
+      <div class="form-field"><label>📁 Grabación en Google Drive (subir después del webinar)</label><input id="mWebDrive" placeholder="https://drive.google.com/file/d/..." class="drive-input"></div>
+      <div class="form-field"><label>🖼️ Imagen de portada (Google Drive)</label><input id="mWebImg" placeholder="https://drive.google.com/file/d/..." class="drive-input"></div>
+      <div class="modal-footer"><button class="btn-secondary" onclick="closeModals()">Cancelar</button><button class="btn-add" onclick="addWebinar()">Programar</button></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="pdfModal" onclick="if(event.target===this)closeModals()">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeModals()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <div class="modal-title">Nuevo PDF</div>
+      <div class="modal-subtitle">Sube material descargable.</div>
+      <div class="form-field"><label>Nombre</label><input id="mPdfName" placeholder="Ej: Guía de protocolos"></div>
+      <div class="form-row"><div class="form-field"><label>Categoría</label><select id="mPdfCat"><option>Guía</option><option>Manual</option><option>Ficha técnica</option><option>Protocolo</option><option>Workbook</option></select></div><div class="form-field"><label>Páginas</label><input id="mPdfPages" type="number" placeholder="32"></div></div>
+      <div class="form-field"><label>📄 Archivo PDF en Google Drive</label><input id="mPdfDrive" placeholder="https://drive.google.com/file/d/..." class="drive-input"></div>
+      <div class="form-field"><label>🖼️ Imagen de portada (Google Drive)</label><input id="mPdfImg" placeholder="https://drive.google.com/file/d/..." class="drive-input"></div>
+      <div class="modal-footer"><button class="btn-secondary" onclick="closeModals()">Cancelar</button><button class="btn-add" onclick="addPdf()">Publicar</button></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="noticiaModal" onclick="if(event.target===this)closeModals()">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeModals()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <div class="modal-title">Nueva noticia</div>
+      <div class="modal-subtitle">Publica una actualización.</div>
+      <div class="form-field"><label>Título</label><input id="mNewsTitle" placeholder="Ej: Lanzamos certificación premium"></div>
+      <div class="form-row"><div class="form-field"><label>Categoría</label><select id="mNewsCat"><option>Novedad</option><option>Tendencia</option><option>Curso</option><option>Artículo</option></select></div><div class="form-field"><label>Autor</label><input id="mNewsAuthor" placeholder="Equipo Dermalysse"></div></div>
+      <div class="form-field"><label>Contenido</label><textarea id="mNewsContent" rows="3" placeholder="Descripción de la noticia..."></textarea></div>
+      <div class="form-field"><label>🖼️ Imagen de la noticia (Google Drive)</label><input id="mNewsDrive" placeholder="https://drive.google.com/file/d/..." class="drive-input"></div>
+      <div class="modal-footer"><button class="btn-secondary" onclick="closeModals()">Cancelar</button><button class="btn-add" onclick="addNoticia()">Publicar</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span id="toastText">Guardado</span></div>
+
+  <!-- MODAL NOTIFICACIÓN -->
+  <div class="modal-backdrop" id="notifModal" onclick="if(event.target===this)closeModals()">
+    <div class="modal-card">
+      <button class="modal-close" onclick="closeModals()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <div class="modal-title" id="notifModalTitle">Enviar notificación</div>
+      <div class="modal-subtitle">Se enviará a todos los miembros activos del club.</div>
+      <div class="form-field"><label>Título de la notificación</label><input id="mNotifTitle" placeholder="Ej: Nuevo curso disponible"></div>
+      <div class="form-field"><label>Mensaje</label><textarea id="mNotifMsg" rows="3" placeholder="Describe el contenido de la notificación..."></textarea></div>
+      <div class="form-field"><label>Link (opcional)</label><input id="mNotifLink" placeholder="https://..." class="drive-input" style="border-left-color:var(--azul-main) !important;"></div>
+      <input type="hidden" id="mNotifType" value="">
+      <div style="padding:.85rem 1rem;background:var(--bg-elevated);border:1px solid var(--border-soft);border-radius:var(--radius-sm);display:flex;align-items:center;gap:.65rem;margin-top:.5rem;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>
+        <span style="font-size:.88rem;color:var(--text-secondary);">Destinatarios: <strong style="color:var(--text-primary);" id="notifRecipients">0</strong> miembros activos</span>
+      </div>
+      <div class="modal-footer"><button class="btn-secondary" onclick="closeModals()">Cancelar</button><button class="btn-add" onclick="sendNotification()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Enviar a todos
+      </button></div>
+    </div>
+  </div>
+
+<script src="dermalysse-bunny-catalog.js"></script>
+<script>
+  // ═══ SAFE STORAGE ═══
+  const mem={};
+  function sGet(k){try{return localStorage.getItem(k)}catch(e){return mem[k]||null}}
+  function sSet(k,v){try{localStorage.setItem(k,v)}catch(e){mem[k]=v}}
+
+  // ═══ SYNC KEYS (compartidos entre Admin y Club) ═══
+  const SYNC_KEYS = {
+    courses: 'dermalysse_sync_courses',
+    webinars: 'dermalysse_sync_webinars',
+    pdfs: 'dermalysse_sync_pdfs',
+    news: 'dermalysse_sync_news',
+    notifs: 'dermalysse_sync_notifs',
+    members: 'dermalysse_sync_members',
+    config: 'dermalysse_sync_config'
+  };
+
+  function syncSave(key, data) {
+    sSet(key, JSON.stringify(data));
+    // También guardar en Firestore
+    const fsMap={'dermalysse_sync_courses':'courses','dermalysse_sync_webinars':'webinars','dermalysse_sync_pdfs':'pdfs','dermalysse_sync_news':'news','dermalysse_sync_notifs':'notifications','dermalysse_sync_members':'members','dermalysse_sync_config':'config','dermalysse_sync_atlas':'atlas'};
+    const col=fsMap[key];
+    if(col&&Array.isArray(data)){
+      const batch=db.batch();
+      data.forEach(item=>{if(item.id){batch.set(db.collection(col).doc(item.id),JSON.parse(JSON.stringify(item)));}});
+      batch.commit().then(()=>console.log('Firestore:',col,'guardado')).catch(e=>console.error('Firestore save error:',e));
+    }
+  }
+  function syncLoad(key) { try { const d = sGet(key); return d ? JSON.parse(d) : null; } catch(e) { return null; } }
+
+  // ═══ MOCK DATA (defaults si no hay datos en localStorage) ═══
+  const DEFAULT_COURSES=[
+    {id:'c-01',name:'Fundamentos de Dermatología Estética',cat:'Dermatología',level:'Intermedio',status:'published',instructor:'Dr. Miguel Castro',date:'2026-03-14',temario:'https://drive.google.com/file/d/temario1',img:'https://drive.google.com/file/d/portada1',lessons:[
+      {name:'Introducción a la dermatología estética',desc:'Historia, evolución y alcance actual de la especialidad.',dur:'45 min',drive:'https://drive.google.com/file/d/clase1'},
+      {name:'Anatomía de la piel',desc:'Capas de la piel, funciones y estructuras anexas.',dur:'52 min',drive:'https://drive.google.com/file/d/clase2'},
+      {name:'Tipos de piel y diagnóstico',desc:'Clasificación Fitzpatrick, Baumann y evaluación clínica.',dur:'38 min',drive:'https://drive.google.com/file/d/clase3'},
+      {name:'Fotoprotección',desc:'Radiación UV, SPF, filtros minerales vs químicos.',dur:'41 min',drive:''},
+      {name:'Evaluación facial integral',desc:'Técnicas de análisis, lámpara de Wood, dermatoscopio.',dur:'55 min',drive:''}
+    ]},
+    {id:'c-02',name:'Hidrafacial Avanzado',cat:'Estética',level:'Avanzado',status:'published',instructor:'Dra. Ana Valdés',date:'2026-04-01',temario:'',img:'',lessons:[
+      {name:'Principios del Hidrafacial',desc:'Mecanismo de acción: limpieza, exfoliación, extracción, hidratación.',dur:'35 min',drive:'https://drive.google.com/file/d/hf1'},
+      {name:'Protocolos por tipo de piel',desc:'Adaptación para piel grasa, seca, mixta y sensible.',dur:'48 min',drive:'https://drive.google.com/file/d/hf2'},
+      {name:'Activos y boosters',desc:'Selección de sérums según necesidad del paciente.',dur:'42 min',drive:''},
+      {name:'Práctica en cabina',desc:'Demostración paso a paso del procedimiento completo.',dur:'60 min',drive:''}
+    ]},
+    {id:'c-03',name:'Cosmética Natural',cat:'Cosmetología',level:'Básico',status:'draft',instructor:'Dra. Laura Ríos',date:'2026-04-20',temario:'',img:'',lessons:[]}
+  ];
+
+  let COURSES = syncLoad(SYNC_KEYS.courses) || DEFAULT_COURSES;
+
+  function saveCourses() { syncSave(SYNC_KEYS.courses, COURSES); }
+
+  function normalizarTituloBunny(value){
+    return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+      .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  function similitudTituloBunny(a,b){
+    const stop=new Set(['de','del','la','las','los','el','en','para','por','y','con']);
+    const tokens=v=>new Set(normalizarTituloBunny(v).split(' ').filter(x=>x&&!stop.has(x)));
+    const aa=tokens(a),bb=tokens(b);if(!aa.size||!bb.size)return 0;
+    let same=0;aa.forEach(x=>{if(bb.has(x))same++});return same/Math.max(aa.size,bb.size);
+  }
+  function slugTituloBunny(value){
+    return normalizarTituloBunny(value).replace(/\s+/g,'-').slice(0,90)||('curso-'+Date.now());
+  }
+  function duracionBunny(seconds){
+    const min=Math.max(1,Math.round((Number(seconds)||0)/60));
+    return min>=60?Math.floor(min/60)+' h '+(min%60?min%60+' min':''):min+' min';
+  }
+
+  window.sincronizarBunnyDermalysse=async function(){
+    const catalog=window.DERMALYSSE_BUNNY_CATALOG;
+    const btn=document.getElementById('syncBunnyBtn');
+    if(!Array.isArray(catalog)||!catalog.length){showToast('Primero genera el catálogo de Bunny');return;}
+    const total=catalog.reduce((sum,c)=>sum+(c.sesiones||[]).length,0);
+    if(!confirm('Se vincularán '+total+' videos de Bunny con '+catalog.length+' cursos.\n\nSe conservarán portadas, temarios, descripciones, orden y progreso.\n\n¿Continuar?'))return;
+    if(btn){btn.disabled=true;btn.textContent='Sincronizando…';}
+    try{
+      const snap=await db.collection('courses').get();
+      const existing=snap.docs.map(d=>({id:d.id,...d.data()}));
+      const used=new Set();
+      const maxOrder=existing.reduce((m,c)=>Math.max(m,Number(c.order)||0),0);
+      let nextOrder=maxOrder+1,updated=0,created=0;
+      const batch=db.batch();
+
+      catalog.forEach(item=>{
+        let previous=existing.find(c=>!used.has(c.id)&&c.bunnyCollectionId===item.collectionId);
+        if(!previous)previous=existing.find(c=>!used.has(c.id)&&normalizarTituloBunny(c.name)===normalizarTituloBunny(item.titulo));
+        if(!previous){
+          previous=existing.filter(c=>!used.has(c.id)).map(c=>({course:c,score:similitudTituloBunny(c.name,item.titulo)}))
+            .filter(x=>x.score>=.7).sort((a,b)=>b.score-a.score)[0]?.course||null;
+        }
+        const id=previous?.id||('bunny-'+slugTituloBunny(item.titulo));
+        if(previous)used.add(previous.id);
+        const oldLessons=Array.isArray(previous?.lessons)?previous.lessons:[];
+        const lessons=(item.sesiones||[]).map((s,i)=>{
+          const old=oldLessons[i]||{};
+          return {...old,name:old.name||s.titulo||('Clase '+(i+1)),desc:old.desc||'',dur:old.dur||duracionBunny(s.duracionSegundos),provider:'bunny',videoId:s.videoId,drive:''};
+        });
+        const data={lessons,bunnyCollectionId:item.collectionId,videoProvider:'bunny',migratedFromDrive:true,updatedAt:new Date().toISOString()};
+        if(!previous){
+          Object.assign(data,{id,name:item.titulo,desc:'',cat:'Dermatología',level:'Intermedio',status:'published',instructor:'Equipo Dermalysse',date:new Date().toISOString().split('T')[0],temario:'',img:'',releaseType:'drip',order:nextOrder++,unlockDate:''});
+          created++;
+        }else updated++;
+        batch.set(db.collection('courses').doc(id),data,{merge:true});
+      });
+      await batch.commit();
+      await _loadFromFirestore();
+      renderCursos();renderDashboard();
+      showToast('Bunny sincronizado: '+total+' videos · '+updated+' actualizados · '+created+' creados');
+    }catch(error){console.error('[Bunny sync]',error);showToast('Error al sincronizar: '+(error.message||error));}
+    finally{if(btn){btn.disabled=false;btn.textContent='Sincronizar videos Bunny';}}
+  };
+
+  const DEFAULT_WEBINARS=[
+    {id:'w-01',title:'Peelings químicos: del ácido glicólico al TCA',date:'2026-11-22T19:00',duration:'60 min',speaker:'Dr. Miguel Castro',registered:87,status:'scheduled',cv:'https://drive.google.com/file/d/cv-castro',live:'https://zoom.us/j/ejemplo123',drive:'',img:''},
+    {id:'w-02',title:'Rutinas anti-envejecimiento',date:'2026-11-29T19:00',duration:'75 min',speaker:'Dra. Patricia Ruiz',registered:54,status:'scheduled',cv:'',live:'',drive:'',img:''}
+  ];
+  let WEBINARS = syncLoad(SYNC_KEYS.webinars) || DEFAULT_WEBINARS;
+  function saveWebinars() { syncSave(SYNC_KEYS.webinars, WEBINARS); }
+
+  const DEFAULT_PDFS=[
+    {id:'p-01',name:'Guía · Protocolos de limpieza facial',cat:'Guía',pages:32,downloads:124,date:'2026-03-05',drive:'https://drive.google.com/file/d/ejemplo-pdf1',img:''},
+    {id:'p-02',name:'Manual · Tipos de piel y diagnóstico',cat:'Manual',pages:18,downloads:89,date:'2026-03-20',drive:'https://drive.google.com/file/d/ejemplo-pdf2',img:'https://drive.google.com/file/d/portada-manual'},
+    {id:'p-03',name:'Fichas técnicas · Activos 2026',cat:'Ficha técnica',pages:45,downloads:67,date:'2026-04-10',drive:'',img:''}
+  ];
+  let PDFS = syncLoad(SYNC_KEYS.pdfs) || DEFAULT_PDFS;
+  function savePdfs() { syncSave(SYNC_KEYS.pdfs, PDFS); }
+
+  const DEFAULT_NEWS=[
+    {id:'n-01',title:'Lanzamos la certificación premium',cat:'Novedad',author:'Equipo Dermalysse',views:356,status:'published',date:'2026-04-12',drive:''},
+    {id:'n-02',title:'Ácido polyglutámico vs hialurónico',cat:'Tendencia',author:'Dra. Ana Valdés',views:198,status:'published',date:'2026-04-08',drive:''}
+  ];
+  let NEWS = syncLoad(SYNC_KEYS.news) || DEFAULT_NEWS;
+  function saveNews() { syncSave(SYNC_KEYS.news, NEWS); }
+
+  const DEFAULT_MEMBERS=[];
+  let MEMBERS = syncLoad(SYNC_KEYS.members) || DEFAULT_MEMBERS;
+  function saveMembers() { syncSave(SYNC_KEYS.members, MEMBERS); }
+
+  // Actividad y gráfica se generan dinámicamente en renderDashboard
+  let ACTIVITY = [];
+  let CHART_DATA = [];
+
+  function generateActivity() {
+    ACTIVITY = [];
+    // Generar actividad desde miembros (ordenados por fecha de registro)
+    const sortedMembers = [...MEMBERS].filter(m=>m.joined).sort((a,b)=>new Date(b.joined)-new Date(a.joined)).slice(0,10);
+    sortedMembers.forEach(m => {
+      const days = Math.floor((Date.now() - new Date(m.joined).getTime()) / 86400000);
+      const time = days === 0 ? 'Hoy' : days === 1 ? 'Ayer' : 'Hace ' + days + ' días';
+      const isPaid = m.plan === 'Mensual' || m.plan === 'Anual';
+      if (isPaid) {
+        ACTIVITY.push({ text: '<strong>' + m.name + '</strong> se suscribió al plan ' + m.plan, time, color: 'blue', ts: new Date(m.joined).getTime() });
+      } else {
+        ACTIVITY.push({ text: 'Nuevo miembro: <strong>' + m.name + '</strong>', time, color: 'green', ts: new Date(m.joined).getTime() });
+      }
+      if (m.status === 'paused') {
+        ACTIVITY.push({ text: '<strong>' + m.name + '</strong> canceló su suscripción', time, color: 'orange', ts: new Date(m.joined).getTime() - 1 });
+      }
+    });
+    // Ordenar por fecha descendente y limitar
+    ACTIVITY.sort((a,b) => (b.ts||0) - (a.ts||0));
+    ACTIVITY = ACTIVITY.slice(0, 8);
+    if (!ACTIVITY.length) {
+      ACTIVITY = [{ text: 'Sin actividad reciente', time: '', color: 'blue' }];
+    }
+  }
+
+  // Cargar actividad desde Firestore (del webhook)
+  async function loadFirestoreActivity() {
+    try {
+      const snap = await db.collection('activity').orderBy('date','desc').limit(10).get();
+      if (!snap.empty) {
+        const fsActivity = snap.docs.map(d => {
+          const data = d.data();
+          const days = Math.floor((Date.now() - new Date(data.date).getTime()) / 86400000);
+          return {
+            text: data.text,
+            color: data.color || 'blue',
+            time: days === 0 ? 'Hoy' : days === 1 ? 'Ayer' : 'Hace ' + days + ' días',
+            ts: new Date(data.date).getTime()
+          };
+        });
+        // Merge con actividad local y ordenar
+        ACTIVITY = [...fsActivity, ...ACTIVITY].sort((a,b) => (b.ts||0) - (a.ts||0));
+        // Eliminar duplicados por texto similar
+        const seen = new Set();
+        ACTIVITY = ACTIVITY.filter(a => {
+          const key = a.text.replace(/<[^>]+>/g,'').substring(0,40);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).slice(0, 8);
+      }
+    } catch(e) {}
+  }
+
+  function generateChartData() {
+    // Agrupar miembros por mes de registro (últimos 7 meses)
+    const months = [];
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ label: d.toLocaleString('es-MX', { month: 'short' }).replace('.',''), year: d.getFullYear(), month: d.getMonth() });
+    }
+    CHART_DATA = months.map(m => {
+      const count = MEMBERS.filter(mb => {
+        if (!mb.joined) return false;
+        const d = new Date(mb.joined);
+        return d.getMonth() === m.month && d.getFullYear() === m.year;
+      }).length;
+      return { label: m.label.charAt(0).toUpperCase() + m.label.slice(1), value: count };
+    });
+  }
+
+
+  // ═══ FIRESTORE HELPERS ═══
+  // ═══ ATLAS DATA ═══
+  const DEFAULT_ATLAS=[
+    {id:'atl-01',name:'Acné vulgar',cat:'Inflamatorio',desc:'Lesiones comedónicas y/o inflamatorias causadas por obstrucción del folículo pilosebáceo.',zones:['Rostro','Espalda','Pecho'],tags:['Comedones','Pápulas','Pústulas'],images:['','','']},
+    {id:'atl-02',name:'Melasma',cat:'Pigmentario',desc:'Hiperpigmentación simétrica adquirida, frecuente en mujeres.',zones:['Pómulos','Frente'],tags:['Manchas','Hormonal','UV'],images:['','','']},
+    {id:'atl-03',name:'Rosácea',cat:'Vascular',desc:'Enrojecimiento facial persistente, telangiectasias y pápulo-pústulas.',zones:['Mejillas','Nariz'],tags:['Rojez','Telangiectasias','Flushing'],images:['','','']},
+    {id:'atl-04',name:'Dermatitis seborreica',cat:'Inflamatorio',desc:'Dermatosis eritematoescamosa en zonas seborreicas.',zones:['Cuero cabelludo','Cejas'],tags:['Descamación','Eritema','Seborrea'],images:['','','']},
+    {id:'atl-05',name:'Psoriasis en placas',cat:'Autoinmune',desc:'Placas eritematosas con escama plateada.',zones:['Codos','Rodillas'],tags:['Placas','Escama','Autoinmune'],images:['','','']},
+    {id:'atl-06',name:'Queratosis actínica',cat:'Premaligno',desc:'Lesiones escamosas por daño UV acumulado.',zones:['Rostro','Manos'],tags:['UV','Premaligno','Escamoso'],images:['','','']},
+    {id:'atl-07',name:'Vitíligo',cat:'Pigmentario',desc:'Despigmentación por destrucción autoinmune de melanocitos.',zones:['Manos','Rostro'],tags:['Despigmentación','Autoinmune'],images:['','','']},
+    {id:'atl-08',name:'Dermatitis atópica',cat:'Inflamatorio',desc:'Dermatitis pruriginosa crónica asociada a atopia.',zones:['Flexuras','Manos'],tags:['Prurito','Eccema','Xerosis'],images:['','','']},
+    {id:'atl-09',name:'Alopecia areata',cat:'Autoinmune',desc:'Pérdida de cabello no cicatricial en parches redondos.',zones:['Cuero cabelludo','Barba'],tags:['Alopecia','Autoinmune'],images:['','','']},
+    {id:'atl-10',name:'Queratosis pilaris',cat:'Estructural',desc:'Tapones córneos foliculares. Aspecto de piel de gallina.',zones:['Brazos','Muslos'],tags:['Folicular','Benigna'],images:['','','']},
+    {id:'atl-11',name:'HPI',cat:'Pigmentario',desc:'Oscurecimiento de la piel tras inflamación.',zones:['Variable'],tags:['PIH','Melanina'],images:['','','']},
+    {id:'atl-12',name:'Urticaria',cat:'Alérgico',desc:'Habones pruriginosos evanescentes.',zones:['Cualquier zona'],tags:['Habones','Prurito'],images:['','','']},
+    {id:'atl-13',name:'Herpes simple',cat:'Infeccioso',desc:'Vesículas agrupadas sobre base eritematosa.',zones:['Labios'],tags:['Vesículas','Viral'],images:['','','']},
+    {id:'atl-14',name:'Molusco contagioso',cat:'Infeccioso',desc:'Pápulas perladas umbilicadas por poxvirus.',zones:['Tronco'],tags:['Pápulas','Viral'],images:['','','']},
+    {id:'atl-15',name:'Verrugas vulgares',cat:'Infeccioso',desc:'Papilomas por VPH con superficie verrucosa.',zones:['Manos','Pies'],tags:['VPH','Verrucoso'],images:['','','']},
+    {id:'atl-16',name:'Dermatitis de contacto',cat:'Alérgico',desc:'Reacción inflamatoria por contacto.',zones:['Manos','Rostro'],tags:['Alérgica','Eccema'],images:['','','']},
+    {id:'atl-17',name:'Liquen plano',cat:'Autoinmune',desc:'Pápulas poligonales, violáceas, pruriginosas.',zones:['Muñecas'],tags:['Pápulas','Violáceas'],images:['','','']},
+    {id:'atl-18',name:'Tiña corporis',cat:'Infeccioso',desc:'Infección fúngica superficial por dermatofitos.',zones:['Tronco'],tags:['Fúngica','Anular'],images:['','','']},
+    {id:'atl-19',name:'Carcinoma basocelular',cat:'Maligno',desc:'Neoplasia cutánea más frecuente.',zones:['Rostro'],tags:['Neoplasia','UV'],images:['','','']},
+    {id:'atl-20',name:'Melanoma',cat:'Maligno',desc:'Neoplasia melanocítica maligna. Regla ABCDE.',zones:['Cualquier zona'],tags:['ABCDE','Urgente'],images:['','','']}
+  ];
+  let ATLAS_DATA = syncLoad('dermalysse_sync_atlas') || DEFAULT_ATLAS;
+  function saveAtlas(){ syncSave('dermalysse_sync_atlas', ATLAS_DATA); }
+
+  function renderAtlasTable(){
+    const tb=document.getElementById('atlasTableBody');
+    if(!tb)return;
+    tb.innerHTML=ATLAS_DATA.map((a,i)=>{
+      const pc=(a.images||[]).filter(u=>u).length;
+      const photoBadge=pc>0?'<span class="badge info">'+pc+'/3</span>':'<span class="no-drive">0/3</span>';
+      return '<tr><td style="font-weight:600;">'+a.name+'</td><td>'+a.cat+'</td><td>'+photoBadge+'</td><td style="font-size:.82rem;color:var(--text-muted);">'+(a.tags||[]).slice(0,3).join(', ')+'</td><td>'+actionBtns("editAtlasItem("+i+")","deleteAtlasItem("+i+")")+'</td></tr>';
+    }).join('')||'<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin condiciones.</td></tr>';
+  }
+
+  function openAtlasForm(idx){
+    const isEdit=idx!==undefined;
+    const item=isEdit?ATLAS_DATA[idx]:{id:'atl-'+Date.now(),name:'',cat:'Inflamatorio',desc:'',zones:[],tags:[],images:['','','']};
+    const cats=['Inflamatorio','Pigmentario','Vascular','Autoinmune','Premaligno','Maligno','Infeccioso','Alérgico','Estructural'];
+    const sec=document.getElementById('view-atlas');
+    sec.innerHTML='<div style="max-width:600px;margin:0 auto;padding:1.5rem 0;"><h2>'+(isEdit?'Editar':'Nueva')+' condición</h2>'+
+      '<div class="form-field"><label>Nombre</label><input id="atlasName" value="'+(item.name||'')+'"></div>'+
+      '<div class="form-field"><label>Categoría</label><select id="atlasCat">'+cats.map(c=>'<option'+(c===item.cat?' selected':'')+'>'+c+'</option>').join('')+'</select></div>'+
+      '<div class="form-field"><label>Descripción</label><textarea id="atlasDesc" rows="3">'+(item.desc||'')+'</textarea></div>'+
+      '<div class="form-field"><label>Tags (separados por coma)</label><input id="atlasTags" value="'+(item.tags||[]).join(', ')+'"></div>'+
+      '<div class="form-field"><label>Zonas (separadas por coma)</label><input id="atlasZones" value="'+(item.zones||[]).join(', ')+'"></div>'+
+      '<div class="form-field"><label>Foto 1 (enlace Google Drive)</label><input id="atlasImg1" value="'+((item.images||[])[0]||'')+'" placeholder="https://drive.google.com/file/d/..."></div>'+
+      '<div class="form-field"><label>Foto 2</label><input id="atlasImg2" value="'+((item.images||[])[1]||'')+'" placeholder="https://drive.google.com/file/d/..."></div>'+
+      '<div class="form-field"><label>Foto 3</label><input id="atlasImg3" value="'+((item.images||[])[2]||'')+'" placeholder="https://drive.google.com/file/d/..."></div>'+
+      '<div style="display:flex;gap:.75rem;margin-top:1.5rem;"><button class="btn-primary" onclick="saveAtlasItem('+(isEdit?idx:'undefined')+')">Guardar</button><button class="btn-secondary" onclick="restoreAtlasView()">Cancelar</button></div></div>';
+  }
+
+  function restoreAtlasView(){
+    const sec=document.getElementById('view-atlas');
+    sec.innerHTML='<div class="section-header"><div><h1>Atlas Visual</h1><p class="section-subtitle">Gestiona las condiciones dermatológicas del atlas.</p></div><button class="btn-primary" onclick="openAtlasForm()">+ Nueva condición</button></div><div class="data-table-wrap"><table class="data-table"><thead><tr><th>Condición</th><th>Categoría</th><th>Fotos</th><th>Tags</th><th></th></tr></thead><tbody id="atlasTableBody"></tbody></table></div>';
+    renderAtlasTable();
+  }
+
+  function saveAtlasItem(idx){
+    const item={
+      id:idx!==undefined?ATLAS_DATA[idx].id:'atl-'+Date.now(),
+      name:document.getElementById('atlasName').value.trim(),
+      cat:document.getElementById('atlasCat').value,
+      desc:document.getElementById('atlasDesc').value.trim(),
+      tags:document.getElementById('atlasTags').value.split(',').map(t=>t.trim()).filter(t=>t),
+      zones:document.getElementById('atlasZones').value.split(',').map(t=>t.trim()).filter(t=>t),
+      images:[document.getElementById('atlasImg1').value.trim(),document.getElementById('atlasImg2').value.trim(),document.getElementById('atlasImg3').value.trim()]
+    };
+    if(!item.name){showToast('Nombre requerido');return;}
+    if(idx!==undefined){ATLAS_DATA[idx]=item;}else{ATLAS_DATA.push(item);}
+    saveAtlas();
+    restoreAtlasView();
+    showToast(idx!==undefined?'Condición actualizada':'Condición agregada');
+  }
+
+  function editAtlasItem(idx){openAtlasForm(idx);}
+
+  function deleteAtlasItem(idx){
+    if(!confirm('¿Eliminar '+ATLAS_DATA[idx].name+'?'))return;
+    ATLAS_DATA.splice(idx,1);
+    saveAtlas();
+    renderAtlasTable();
+    showToast('Condición eliminada');
+  }
+
+  // ═══ ADMIN CONFIG (toggles funcionales) ═══
+  async function toggleAdminConfig(key, el) {
+    el.classList.toggle('active');
+    const val = el.classList.contains('active');
+    showToast('Ajuste actualizado');
+    try {
+      await db.collection('config').doc('platform').set({ [key]: val }, { merge: true });
+      console.log('Config:', key, '=', val);
+    } catch(e) { console.error('Config save error:', e); }
+  }
+
+  async function loadAdminConfig() {
+    try {
+      const doc = await db.collection('config').doc('platform').get();
+      if (!doc.exists) return;
+      const cfg = doc.data();
+      const map = { notifNewMember:'cfgNotifNewMember', maintenance:'cfgMaintenance', openRegistration:'cfgOpenRegistration' };
+      for (const [key, id] of Object.entries(map)) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        if (cfg[key] === true) el.classList.add('active');
+        else if (cfg[key] === false) el.classList.remove('active');
+      }
+    } catch(e) {}
+  }
+
+  async function _loadFromFirestore() {
+    try {
+      const cols={courses:['dermalysse_sync_courses',DEFAULT_COURSES],webinars:['dermalysse_sync_webinars',DEFAULT_WEBINARS],pdfs:['dermalysse_sync_pdfs',DEFAULT_PDFS],news:['dermalysse_sync_news',DEFAULT_NEWS],members:['dermalysse_sync_members',DEFAULT_MEMBERS],notifications:['dermalysse_sync_notifs',DEFAULT_NOTIF_HISTORY]};
+      for(const[col,[lsKey,defaults]] of Object.entries(cols)){
+        const snap=await db.collection(col).get();
+        if(!snap.empty){
+          const data=snap.docs.map(d=>({id:d.id,...d.data()}));
+          sSet(lsKey,JSON.stringify(data));
+        }
+      }
+      // Recargar variables globales desde localStorage actualizado
+      COURSES=syncLoad(SYNC_KEYS.courses)||DEFAULT_COURSES;
+      WEBINARS=syncLoad(SYNC_KEYS.webinars)||DEFAULT_WEBINARS;
+      PDFS=syncLoad(SYNC_KEYS.pdfs)||DEFAULT_PDFS;
+      NEWS=syncLoad(SYNC_KEYS.news)||DEFAULT_NEWS;
+      NOTIF_HISTORY=syncLoad(SYNC_KEYS.notifs)||DEFAULT_NOTIF_HISTORY;
+
+      // Cargar miembros con info de suscripción desde users
+      try {
+        const membersSnap=await db.collection('members').get();
+        if(!membersSnap.empty){
+          const membersData=membersSnap.docs.map(d=>({id:d.id,...d.data()}));
+          // Enriquecer con info de suscripción desde users
+          const usersSnap=await db.collection('users').get();
+          const usersMap={};
+          usersSnap.docs.forEach(d=>{usersMap[d.id]=d.data()});
+          MEMBERS=membersData.map(m=>{
+            const u=usersMap[m.uid||m.id]||{};
+            const sub=u.subscription||{};
+            return{
+              ...m,
+              uid:m.uid||m.id,
+              plan:sub.plan?sub.plan.charAt(0).toUpperCase()+sub.plan.slice(1):(m.plan||'Free'),
+              status:sub.status==='active'?'active':sub.status==='canceled'?'paused':(m.status||'active'),
+              courses:Object.keys(u.progress||{}).filter(k=>{const lessons=u.progress[k];return Array.isArray(lessons)&&lessons.length>0}).length||m.courses||0,
+              subscribedAt:sub.subscribedAt||sub.updatedAt||null,
+              currentPeriodEnd:sub.currentPeriodEnd||null,
+              vigenciaHasta:u.vigenciaHasta||null,
+              regaloDesde:u.regaloDesde||null
+            };
+          });
+        } else { MEMBERS=DEFAULT_MEMBERS; }
+      } catch(e){ MEMBERS=syncLoad(SYNC_KEYS.members)||DEFAULT_MEMBERS; }
+      try{const atlasSnap=await db.collection('atlas').get();if(!atlasSnap.empty)ATLAS_DATA=atlasSnap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){}
+      console.log('✅ Admin: datos cargados desde Firestore');
+    } catch(e){console.error('Firestore load error:',e);}
+  }
+
+  async function _seedIfEmpty() {
+    try {
+      const snap=await db.collection('courses').limit(1).get();
+      if(snap.empty){
+        console.log('📦 Seed: cargando datos iniciales a Firestore...');
+        syncSave(SYNC_KEYS.courses,DEFAULT_COURSES);
+        syncSave(SYNC_KEYS.webinars,DEFAULT_WEBINARS);
+        syncSave(SYNC_KEYS.pdfs,DEFAULT_PDFS);
+        syncSave(SYNC_KEYS.news,DEFAULT_NEWS);
+        syncSave(SYNC_KEYS.members,DEFAULT_MEMBERS);
+        syncSave(SYNC_KEYS.notifs,DEFAULT_NOTIF_HISTORY);
+        syncSave('dermalysse_sync_atlas',DEFAULT_ATLAS);
+      }
+    } catch(e){console.error('Seed error:',e);}
+  }
+
+  // ═══ GOOGLE SIGN-IN ADMIN ═══
+  async function handleGoogleLoginAdmin() {
+    try {
+      const result=await auth.signInWithPopup(googleProvider);
+      const adminDoc=await db.collection('admins').doc(result.user.uid).get();
+      if(!adminDoc.exists){await auth.signOut();showToast('No tienes permisos de administrador');return;}
+      sSet('dermalysse_admin_session',JSON.stringify({email:result.user.email,uid:result.user.uid,loggedAt:Date.now()}));
+      await _seedIfEmpty();
+      await _loadFromFirestore();
+      enterApp();
+    } catch(err){if(err.code!=='auth/popup-closed-by-user')showToast('Error: '+(err.message||err.code));}
+  }
+
+  // ═══ AUTH ═══
+  async function handleLogin(){
+    const email=document.getElementById('loginEmail').value.trim();
+    const pw=document.getElementById('loginPassword').value;
+    if(!email||pw.length<6){
+      if(!email)document.getElementById('loginEmail').style.borderColor='#e11d48';
+      if(pw.length<6){document.getElementById('loginPassword').style.borderColor='#e11d48';showToast('Mínimo 6 caracteres');}
+      return;
+    }
+    try{
+      const cred=await auth.signInWithEmailAndPassword(email,pw);
+      const adminDoc=await db.collection('admins').doc(cred.user.uid).get();
+      if(!adminDoc.exists){await auth.signOut();showToast('No tienes permisos de administrador');return;}
+      sSet('dermalysse_admin_session',JSON.stringify({email:cred.user.email,uid:cred.user.uid,loggedAt:Date.now()}));
+      await _seedIfEmpty();
+      await _loadFromFirestore();
+      enterApp();
+    }catch(err){
+      if(err.code==='auth/user-not-found')showToast('No existe cuenta con ese correo');
+      else if(err.code==='auth/wrong-password'||err.code==='auth/invalid-credential')showToast('Contraseña incorrecta');
+      else showToast('Error: '+(err.message||err.code));
+    }
+  }
+
+  function enterApp(){
+    document.getElementById('authScreen').classList.remove('active');
+    document.getElementById('appScreen').classList.add('active');
+    renderDashboard();
+    renderCursos();
+    renderWebinars();
+    renderPdfs();
+    renderNoticias();
+    renderMiembros();
+    renderNotifHistory();
+    loadDarkMode();
+    loadAdminConfig();
+  }
+
+  async function logout(){
+    try{await auth.signOut();}catch(e){}
+    try{localStorage.removeItem('dermalysse_admin_session')}catch(e){}
+    location.reload();
+  }
+
+  // Auto-login Firebase
+  auth.onAuthStateChanged(async function(user){
+    if(user){
+      try{
+        const adminDoc=await db.collection('admins').doc(user.uid).get();
+        if(adminDoc.exists){
+          sSet('dermalysse_admin_session',JSON.stringify({email:user.email,uid:user.uid,loggedAt:Date.now()}));
+          await _seedIfEmpty();
+          await _loadFromFirestore();
+          enterApp();
+        } else { await auth.signOut(); }
+      }catch(e){console.error('Admin auth error:',e);}
+    }
+  });
+
+  // ═══ NAV ═══
+  function goTo(view){
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
+    document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='view-'+view));
+    if(view==='atlas') renderAtlasTable();
+    window.scrollTo({top:0,behavior:'instant'});
+    closeSidebar();
+  }
+  function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('sidebarOverlay').classList.add('active')}
+  function closeSidebar(){document.getElementById('sidebar').classList.remove('open');document.getElementById('sidebarOverlay').classList.remove('active')}
+
+  // ═══ DASHBOARD ═══
+  function renderDashboard(){
+    const totalMembers=MEMBERS.length;
+    const activeMembers=MEMBERS.filter(m=>m.status==='active').length;
+    const mensualCount=MEMBERS.filter(m=>m.plan==='Mensual'&&m.status==='active').length;
+    const anualCount=MEMBERS.filter(m=>m.plan==='Anual'&&m.status==='active').length;
+    const _pMes = Number(window.__precioMes) || 200;
+    const _pAno = Number(window.__precioAno) || 1799;
+    const monthlyIncome = (mensualCount * _pMes) + Math.round(anualCount * _pAno / 12);
+    const totalCourses=COURSES.filter(c=>c.status==='published').length;
+    const totalLessons=COURSES.reduce((s,c)=>s+(c.lessons?c.lessons.length:0),0);
+    const totalWebinars=WEBINARS.length;
+
+    // Calcular deltas (comparar con mes anterior)
+    const now = new Date();
+    const thisMonth = now.getMonth();
+    const thisYear = now.getFullYear();
+    const lastMonthMembers = MEMBERS.filter(m => { if(!m.joined)return false; const d=new Date(m.joined); return d.getMonth()===thisMonth && d.getFullYear()===thisYear; }).length;
+
+    document.getElementById('kpisGrid').innerHTML=[
+      {label:'Miembros activos',value:activeMembers,delta:lastMonthMembers>0?'+'+lastMonthMembers+' este mes':'',up:true,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>'},
+      {label:'Cursos · Clases',value:totalCourses+' · '+totalLessons,delta:'',up:true,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/></svg>'},
+      {label:'Webinars programados',value:totalWebinars,delta:'',up:true,icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'}
+    ].map(k=>`
+      <div class="kpi-card">
+        <div class="kpi-head"><div class="kpi-label">${k.label}</div><div class="kpi-icon">${k.icon}</div></div>
+        <div class="kpi-value">${k.value}</div>
+        ${k.delta?`<div class="kpi-foot"><span class="kpi-delta ${k.up?'up':'down'}">${k.delta}</span></div>`:''}
+      </div>
+    `).join('');
+
+    // Generar datos dinámicos
+    generateActivity();
+    generateChartData();
+    loadFirestoreActivity().then(() => {
+      document.getElementById('activityList').innerHTML=ACTIVITY.map(a=>`
+        <div class="activity-item"><div class="activity-dot ${a.color}"></div><div><div class="activity-text">${a.text}</div><div class="activity-time">${a.time}</div></div></div>
+      `).join('');
+    });
+
+    // Chart
+    const maxVal=Math.max(...CHART_DATA.map(d=>d.value),1);
+    document.getElementById('chartBars').innerHTML=CHART_DATA.map(d=>`<div class="chart-bar" style="height:${(d.value/maxVal)*100}%;" data-value="${d.value}"></div>`).join('');
+    document.getElementById('chartLabels').innerHTML=CHART_DATA.map(d=>`<span>${d.label}</span>`).join('');
+
+    // Activity
+    document.getElementById('activityList').innerHTML=ACTIVITY.map(a=>`
+      <div class="activity-item"><div class="activity-dot ${a.color}"></div><div><div class="activity-text">${a.text}</div><div class="activity-time">${a.time}</div></div></div>
+    `).join('');
+  }
+
+  // ═══ CRUD HELPERS ═══
+  const editSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+  const deleteSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+
+  function actionBtns(editFn,deleteFn){
+    return `<div class="action-btns"><button class="action-btn" onclick="${editFn}">${editSvg}</button><button class="action-btn danger" onclick="${deleteFn}">${deleteSvg}</button></div>`;
+  }
+
+  function statusBadge(s){
+    const map={published:['Publicado','success'],draft:['Borrador','neutral'],scheduled:['Programado','info'],active:['Activo','success'],paused:['Pausado','warn'],cancelled:['Cancelado','danger']};
+    const[label,cls]=map[s]||['—','neutral'];
+    return `<span class="badge ${cls}">${label}</span>`;
+  }
+
+  const driveSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+  function driveLink(url){
+    if(!url) return '<span class="no-drive">Sin enlace</span>';
+    return `<a class="drive-link" href="${url}" target="_blank" onclick="event.stopPropagation()">${driveSvg} Abrir</a>`;
+  }
+  function liveLink(url){
+    if(!url) return '<span class="no-drive">Sin link</span>';
+    return `<a class="drive-link" href="${url}" target="_blank" onclick="event.stopPropagation()" style="background:rgba(46,95,122,.10);color:var(--azul-dark);">🔗 Unirse</a>`;
+  }
+  function docLink(url, label){
+    if(!url) return '<span class="no-drive">Sin enlace</span>';
+    return `<a class="drive-link" href="${url}" target="_blank" onclick="event.stopPropagation()" style="background:rgba(52,168,83,.08);color:#34a853;">${driveSvg} ${label||'Ver'}</a>`;
+  }
+
+  // ═══ CURSOS ═══
+  let _claseCounter = 0;
+
+  function addClaseField(){
+    _claseCounter++;
+    const list = document.getElementById('mClasesList');
+    const div = document.createElement('div');
+    div.className = 'lesson-item-row';
+    div.id = 'clase-' + _claseCounter;
+    div.innerHTML = `
+      <div class="lesson-item-header">
+        <span class="lesson-item-num">Clase ${list.children.length + 1}</span>
+        <button class="lesson-remove" onclick="removeClaseField('clase-${_claseCounter}')" title="Eliminar">✕</button>
+      </div>
+      <div class="lesson-fields">
+        <input type="text" class="full" placeholder="Nombre de la clase" data-field="name">
+        <input type="text" placeholder="Descripción breve" data-field="desc">
+        <input type="text" placeholder="Duración (ej: 45 min)" data-field="dur">
+        <input type="text" class="full" placeholder="Bunny Video ID (UUID)" data-field="videoId" style="font-family:monospace;border-left:3px solid #f97316 !important;">
+        <input type="text" class="drive-input" placeholder="Link de Drive antiguo (opcional)" data-field="drive">
+      </div>
+    `;
+    list.appendChild(div);
+    updateClaseCount();
+  }
+
+  function removeClaseField(id){
+    const el = document.getElementById(id);
+    if(el) el.remove();
+    renumberClases();
+    updateClaseCount();
+  }
+
+  function renumberClases(){
+    const items = document.querySelectorAll('#mClasesList .lesson-item-row');
+    items.forEach((item, i) => {
+      const num = item.querySelector('.lesson-item-num');
+      if(num) num.textContent = 'Clase ' + (i + 1);
+    });
+  }
+
+  function updateClaseCount(){
+    const count = document.querySelectorAll('#mClasesList .lesson-item-row').length;
+    const el = document.getElementById('mClaseCount');
+    if(el) el.textContent = count + (count === 1 ? ' clase' : ' clases');
+  }
+
+  function collectClases(){
+    const items = document.querySelectorAll('#mClasesList .lesson-item-row');
+    const clases = [];
+    items.forEach(item => {
+      const name = item.querySelector('[data-field="name"]').value.trim();
+      const desc = item.querySelector('[data-field="desc"]').value.trim();
+      const dur = item.querySelector('[data-field="dur"]').value.trim();
+      const videoId = item.querySelector('[data-field="videoId"]').value.trim().toLowerCase();
+      const drive = item.querySelector('[data-field="drive"]').value.trim();
+      if(name) clases.push({name, desc, dur, provider:videoId?'bunny':(drive?'drive':''), videoId, drive:videoId?'':drive});
+    });
+    return clases;
+  }
+
+  function renderCursos(search){
+    const list=search?COURSES.filter(c=>c.name.toLowerCase().includes(search.toLowerCase())):COURSES;
+    document.getElementById('cursosBody').innerHTML=list.map(c=>{
+      const numClases = c.lessons ? c.lessons.length : 0;
+      const totalDur = c.lessons ? c.lessons.reduce((s,l) => {
+        const m = parseInt(l.dur) || 0;
+        return s + m;
+      }, 0) : 0;
+      const durText = totalDur > 0 ? ' · ' + (totalDur >= 60 ? Math.floor(totalDur/60)+'h '+totalDur%60+'min' : totalDur+'min') : '';
+      const claseBadge = numClases > 0
+        ? `<span class="badge info" style="cursor:pointer;" onclick="viewClases('${c.id}')">${numClases} clases${durText}</span>`
+        : '<span class="no-drive">Sin clases</span>';
+      return `<tr><td style="font-weight:600;">${c.name}<div style="font-size:.75rem;color:var(--text-muted);margin-top:.15rem;">${c.instructor}</div></td><td>${c.cat}</td><td>${c.level}</td><td>${claseBadge}</td><td>${docLink(c.temario,'Temario')}</td><td>${docLink(c.img,'Portada')}</td><td>${statusBadge(c.status)}</td><td>${actionBtns("editCurso('"+c.id+"')","deleteCurso('"+c.id+"')")}</td></tr>`;
+    }).join('')||'<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin cursos. Crea el primero.</td></tr>';
+  }
+
+  function viewClases(courseId){
+    const course = COURSES.find(c=>c.id===courseId);
+    if(!course || !course.lessons.length) return;
+    const html = course.lessons.map((l,i) => `
+      <div style="display:flex;gap:.85rem;padding:.75rem 0;border-bottom:1px solid var(--border-soft);align-items:flex-start;">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--azul-ghost);color:var(--azul-dark);display:grid;place-items:center;font-size:.78rem;font-weight:700;flex-shrink:0;">${i+1}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:.92rem;">${l.name}</div>
+          ${l.desc?`<div style="font-size:.82rem;color:var(--text-secondary);margin-top:.1rem;">${l.desc}</div>`:''}
+          <div style="display:flex;gap:.75rem;margin-top:.35rem;flex-wrap:wrap;">
+            ${l.dur?`<span style="font-size:.75rem;color:var(--text-muted);">⏱ ${l.dur}</span>`:''}
+            ${l.videoId?`<span class="drive-link" style="color:#ea580c;background:rgba(249,115,22,.08);">Bunny · ${l.videoId.slice(0,8)}…</span>`:(l.drive?`<a class="drive-link" href="${l.drive}" target="_blank">${driveSvg} Video</a>`:`<span class="no-drive">Sin video</span>`)}
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    // Reuse an existing modal or create temp
+    const existing = document.getElementById('clasesDetailModal');
+    if(existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop active';
+    modal.id = 'clasesDetailModal';
+    modal.onclick = function(e){if(e.target===this)this.remove()};
+    modal.innerHTML = `
+      <div class="modal-card" style="max-width:580px;">
+        <button class="modal-close" onclick="document.getElementById('clasesDetailModal').remove()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        <div class="modal-title">${course.name}</div>
+        <div class="modal-subtitle">${course.lessons.length} clases · ${course.instructor}</div>
+        <div style="max-height:400px;overflow-y:auto;">${html}</div>
+        <div class="modal-footer"><button class="btn-secondary" onclick="document.getElementById('clasesDetailModal').remove()">Cerrar</button></div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+
+  function toggleReleaseFields(){
+    const v=document.getElementById('mCursoRelease').value;
+    document.getElementById('dripOrderField').style.display=v==='drip'?'':'none';
+    document.getElementById('scheduledDateField').style.display=v==='scheduled'?'':'none';
+  }
+
+  function addCurso(){
+    const name=document.getElementById('mCursoName').value.trim();
+    if(!name){showToast('Ingresa nombre del curso');return}
+    const desc=document.getElementById('mCursoDesc').value.trim();
+    const lessons = collectClases();
+    const temario=document.getElementById('mCursoTemario').value.trim();
+    const img=document.getElementById('mCursoImg').value.trim();
+    const releaseType=document.getElementById('mCursoRelease').value;
+    const order=parseInt(document.getElementById('mCursoOrder').value)||0;
+    const unlockDate=document.getElementById('mCursoUnlockDate').value||'';
+    const data={name,desc,cat:document.getElementById('mCursoCat').value,level:document.getElementById('mCursoLevel').value,status:document.getElementById('mCursoStatus').value,instructor:document.getElementById('mCursoInst').value,temario,img,lessons,releaseType,order,unlockDate};
+    if(_editing.curso){
+      var idx=COURSES.findIndex(c=>c.id===_editing.curso);
+      if(idx>-1){Object.assign(COURSES[idx],data);}
+      showToast('Curso actualizado: '+name);
+    } else {
+      data.id='c-'+Date.now();data.date=new Date().toISOString().split('T')[0];
+      COURSES.push(data);
+      showToast('Curso creado con '+lessons.length+' clases: '+name);
+    }
+    saveCourses();renderCursos();renderDashboard();closeModals();
+    document.getElementById('mClasesList').innerHTML='';_claseCounter=0;updateClaseCount();
+  }
+  function deleteCurso(id){COURSES=COURSES.filter(c=>c.id!==id);saveCourses();renderCursos();renderDashboard();db.collection('courses').doc(id).delete().catch(e=>console.error(e));showToast('Curso eliminado')}
+
+  // ═══ WEBINARS ═══
+  function renderWebinars(){
+    document.getElementById('webinarsBody').innerHTML=WEBINARS.map(w=>`
+      <tr><td style="font-weight:600;">${w.title}</td><td>${new Date(w.date).toLocaleDateString('es-MX',{day:'numeric',month:'short',year:'numeric'})} ${new Date(w.date).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</td><td>${w.speaker}</td><td>${docLink(w.cv,'CV')}</td><td>${liveLink(w.live)}</td><td>${driveLink(w.drive)}</td><td>${statusBadge(w.status)}</td><td>${actionBtns("editWebinar('"+w.id+"')","deleteWebinar('"+w.id+"')")}</td></tr>
+    `).join('')||'<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin webinars programados.</td></tr>';
+  }
+  function addWebinar(){
+    const title=document.getElementById('mWebTitle').value.trim();
+    if(!title){showToast('Ingresa título');return}
+    const data={title,date:document.getElementById('mWebDate').value,duration:document.getElementById('mWebDur').value||'60 min',speaker:document.getElementById('mWebSpeaker').value,cv:document.getElementById('mWebCV').value.trim(),live:document.getElementById('mWebLive').value.trim(),drive:document.getElementById('mWebDrive').value.trim(),img:document.getElementById('mWebImg').value.trim()};
+    if(_editing.webinar){
+      var idx=WEBINARS.findIndex(w=>w.id===_editing.webinar);
+      if(idx>-1){Object.assign(WEBINARS[idx],data);}
+      showToast('Webinar actualizado: '+title);
+    } else {
+      data.id='w-'+Date.now();data.registered=0;data.status='scheduled';
+      WEBINARS.push(data);
+      showToast('Webinar programado: '+title);
+    }
+    saveWebinars();renderWebinars();renderDashboard();closeModals();
+  }
+  function deleteWebinar(id){WEBINARS=WEBINARS.filter(w=>w.id!==id);saveWebinars();renderWebinars();renderDashboard();db.collection('webinars').doc(id).delete().catch(e=>console.error(e));showToast('Webinar eliminado')}
+
+  // ═══ PDFS ═══
+  function renderPdfs(){
+    document.getElementById('pdfsBody').innerHTML=PDFS.map(p=>`
+      <tr><td style="font-weight:600;">${p.name}</td><td>${p.cat}</td><td>${p.pages}</td><td>${driveLink(p.drive)}</td><td>${docLink(p.img,'Portada')}</td><td>${p.downloads}</td><td>${actionBtns("editPdf('"+p.id+"')","deletePdf('"+p.id+"')")}</td></tr>
+    `).join('')||'<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin material. Sube el primero.</td></tr>';
+  }
+  function addPdf(){
+    const name=document.getElementById('mPdfName').value.trim();
+    if(!name){showToast('Ingresa nombre');return}
+    const data={name,cat:document.getElementById('mPdfCat').value,pages:parseInt(document.getElementById('mPdfPages').value)||0,drive:document.getElementById('mPdfDrive').value.trim(),img:document.getElementById('mPdfImg').value.trim()};
+    if(_editing.pdf){
+      var idx=PDFS.findIndex(p=>p.id===_editing.pdf);
+      if(idx>-1){Object.assign(PDFS[idx],data);}
+      showToast('PDF actualizado: '+name);
+    } else {
+      data.id='p-'+Date.now();data.downloads=0;data.date=new Date().toISOString().split('T')[0];
+      PDFS.push(data);
+      showToast('PDF publicado: '+name);
+    }
+    savePdfs();renderPdfs();closeModals();
+  }
+  function deletePdf(id){PDFS=PDFS.filter(p=>p.id!==id);savePdfs();renderPdfs();db.collection('pdfs').doc(id).delete().catch(e=>console.error(e));showToast('PDF eliminado')}
+
+  // ═══ NOTICIAS ═══
+  function renderNoticias(){
+    document.getElementById('noticiasBody').innerHTML=NEWS.map(n=>`
+      <tr><td style="font-weight:600;">${n.title}</td><td>${n.cat}</td><td>${n.author}</td><td>${docLink(n.drive,'Portada')}</td><td>${statusBadge(n.status)}</td><td>${actionBtns("editNoticia('"+n.id+"')","deleteNoticia('"+n.id+"')")}</td></tr>
+    `).join('')||'<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin noticias publicadas.</td></tr>';
+  }
+  function addNoticia(){
+    const title=document.getElementById('mNewsTitle').value.trim();
+    if(!title){showToast('Ingresa título');return}
+    const data={title,cat:document.getElementById('mNewsCat').value,author:document.getElementById('mNewsAuthor').value||'Admin',content:document.getElementById('mNewsContent').value.trim(),drive:document.getElementById('mNewsDrive').value.trim()};
+    if(_editing.noticia){
+      var idx=NEWS.findIndex(n=>n.id===_editing.noticia);
+      if(idx>-1){Object.assign(NEWS[idx],data);}
+      showToast('Noticia actualizada: '+title);
+    } else {
+      data.id='n-'+Date.now();data.views=0;data.status='published';data.date=new Date().toISOString().split('T')[0];
+      NEWS.push(data);
+      showToast('Noticia publicada: '+title);
+    }
+    saveNews();renderNoticias();closeModals();
+  }
+  function deleteNoticia(id){NEWS=NEWS.filter(n=>n.id!==id);saveNews();renderNoticias();db.collection('news').doc(id).delete().catch(e=>console.error(e));showToast('Noticia eliminada')}
+
+  // ═══ MIEMBROS ═══
+  function _initials(name){
+    if(!name) return '?';
+    const p=name.trim().split(/\s+/);
+    return ((p[0]?.[0]||'')+(p[1]?.[0]||'')).toUpperCase()||name[0].toUpperCase();
+  }
+  function renderMiembros(search){
+    const list=search?MEMBERS.filter(m=>m.name.toLowerCase().includes(search.toLowerCase())||m.email.toLowerCase().includes(search.toLowerCase())):MEMBERS;
+    document.getElementById('miembrosBody').innerHTML=list.map(m=>{
+      const planLabel=m.plan||'Free';
+      const planClass=planLabel==='Mensual'||planLabel==='Anual'?'info':planLabel==='Free'?'neutral':'neutral';
+      const nameCell=`<div style="display:flex;align-items:center;gap:.7rem;"><div class="user-avatar">${_initials(m.name)}</div><div><div style="font-weight:600;">${m.name}</div><div style="font-size:.78rem;color:var(--text-muted);">${m.email}</div></div></div>`;
+      return `<tr><td>${nameCell}</td><td><span class="badge ${planClass}">${planLabel}</span></td><td>${statusBadge(m.status)}</td><td>${m.joined?new Date(m.joined).toLocaleDateString('es-MX',{month:'short',year:'numeric'}):'—'}</td><td>${m.courses||0}</td><td>${actionBtns("openSocioModal('"+m.id+"')","deleteMember('"+m.id+"')")}</td></tr>`;
+    }).join('')||'<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin miembros registrados.</td></tr>';
+  }
+  function deleteMember(id){MEMBERS=MEMBERS.filter(m=>m.id!==id);saveMembers();renderMiembros();renderDashboard();db.collection('members').doc(id).delete().catch(e=>console.error(e));showToast('Miembro eliminado')}
+
+  // MODIFICADO: ficha de socio + regalar días de cortesía
+  var _socioActual=null;
+  function _fmtFecha(v){ if(!v) return '—'; const d=new Date(v); if(isNaN(d)) return '—'; return d.toLocaleDateString('es-MX',{day:'numeric',month:'long',year:'numeric'}); }
+  function openSocioModal(id){
+    const m=MEMBERS.find(x=>x.id===id);
+    if(!m){showToast('Socio no encontrado');return;}
+    _socioActual=m;
+    document.getElementById('socioAvatar').textContent=_initials(m.name);
+    document.getElementById('socioName').textContent=m.name;
+    document.getElementById('socioEmail').textContent=m.email||'—';
+    document.getElementById('socioPlan').innerHTML='<span class="badge '+((m.plan==='Mensual'||m.plan==='Anual')?'info':'neutral')+'">'+(m.plan||'Free')+'</span>';
+    document.getElementById('socioEstado').innerHTML=statusBadge(m.status);
+    document.getElementById('socioInscripcion').textContent=_fmtFecha(m.subscribedAt||m.joined);
+    document.getElementById('socioCobro').textContent=_fmtFecha(m.currentPeriodEnd);
+    const vigEl=document.getElementById('socioVigencia');
+    if(m.vigenciaHasta && new Date(m.vigenciaHasta)>new Date()){
+      vigEl.textContent=_fmtFecha(m.vigenciaHasta);
+      vigEl.style.color='var(--success)';
+    } else {
+      vigEl.textContent='Sin regalo activo';
+      vigEl.style.color='var(--text-muted)';
+    }
+    openModal('socioModal');
+  }
+  async function regalarDias(dias){
+    const m=_socioActual;
+    if(!m){showToast('Selecciona un socio');return;}
+    const uid=m.uid||m.id;
+    try{
+      const ref=db.collection('users').doc(uid);
+      const snap=await ref.get();
+      const data=snap.exists?snap.data():{};
+      const now=new Date();
+      // Vigencia: si ya tiene regalo a futuro, extender desde ahí; si no, desde hoy
+      let baseVig=now;
+      const vigVigente=data.vigenciaHasta && new Date(data.vigenciaHasta)>now;
+      if(vigVigente) baseVig=new Date(data.vigenciaHasta);
+      const nuevaVig=new Date(baseVig.getTime()+dias*86400000);
+      // regaloDesde: conservar si el regalo sigue vigente (no reinicia goteo); si no, arranca hoy
+      let regaloDesde=data.regaloDesde;
+      if(!regaloDesde||!vigVigente) regaloDesde=now.toISOString();
+      // set con merge: NO borra subscription ni ningún otro campo
+      await ref.set({vigenciaHasta:nuevaVig.toISOString(),regaloDesde:regaloDesde},{merge:true});
+      // Reflejar en memoria sin recargar
+      m.vigenciaHasta=nuevaVig.toISOString(); m.regaloDesde=regaloDesde;
+      const idx=MEMBERS.findIndex(x=>x.id===m.id); if(idx>=0){MEMBERS[idx].vigenciaHasta=m.vigenciaHasta;MEMBERS[idx].regaloDesde=m.regaloDesde;}
+      openSocioModal(m.id);
+      renderMiembros();
+      showToast('Regalados '+dias+' días a '+m.name);
+    }catch(e){console.error(e);showToast('Error al regalar: '+(e.message||e.code));}
+  }
+
+  // ═══ MODALS (optimized for speed) ═══
+  const _modals=document.querySelectorAll('.modal-backdrop');
+  function openModal(id){
+    const m=document.getElementById(id);
+    m.classList.add('active');
+    document.body.style.overflow='hidden';
+  }
+  function closeModals(){
+    _modals.forEach(m=>m.classList.remove('active'));
+    document.body.style.overflow='';
+    resetEditMode();
+  }
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModals()});
+
+  // ═══ EDIT MODE ═══
+  var _editing = {curso:null,webinar:null,pdf:null,noticia:null};
+
+  function editCurso(id){
+    var c=COURSES.find(x=>x.id===id);if(!c)return;
+    _editing.curso=id;
+    document.getElementById('mCursoName').value=c.name||'';
+    document.getElementById('mCursoDesc').value=c.desc||'';
+    document.getElementById('mCursoCat').value=c.cat||'Dermatología';
+    document.getElementById('mCursoLevel').value=c.level||'Básico';
+    document.getElementById('mCursoInst').value=c.instructor||'';
+    document.getElementById('mCursoStatus').value=c.status||'draft';
+    document.getElementById('mCursoTemario').value=c.temario||'';
+    document.getElementById('mCursoImg').value=c.img||'';
+    document.getElementById('mCursoRelease').value=c.releaseType||'immediate';
+    document.getElementById('mCursoOrder').value=c.order||'';
+    document.getElementById('mCursoUnlockDate').value=c.unlockDate||'';
+    toggleReleaseFields();
+    var clList=document.getElementById('mClasesList');clList.innerHTML='';_claseCounter=0;
+    if(c.lessons&&c.lessons.length){c.lessons.forEach(function(l){addClaseField();var row=document.getElementById('clase-'+_claseCounter);if(row){var nf=row.querySelector('[data-field="name"]');var df=row.querySelector('[data-field="desc"]');var du=row.querySelector('[data-field="dur"]');var vi=row.querySelector('[data-field="videoId"]');var dr=row.querySelector('[data-field="drive"]');if(nf)nf.value=l.name||'';if(df)df.value=l.desc||'';if(du)du.value=l.dur||'';if(vi)vi.value=l.videoId||'';if(dr)dr.value=l.drive||'';}})}
+    updateClaseCount();
+    document.querySelector('#cursoModal .modal-title').textContent='Editar curso';
+    document.querySelector('#cursoModal .btn-add').textContent='Guardar cambios';
+    openModal('cursoModal');
+  }
+  function editWebinar(id){
+    var w=WEBINARS.find(x=>x.id===id);if(!w)return;
+    _editing.webinar=id;
+    document.getElementById('mWebTitle').value=w.title||'';
+    document.getElementById('mWebDate').value=w.date||'';
+    document.getElementById('mWebDur').value=w.duration||'';
+    document.getElementById('mWebSpeaker').value=w.speaker||'';
+    document.getElementById('mWebCV').value=w.cv||'';
+    document.getElementById('mWebLive').value=w.live||'';
+    document.getElementById('mWebDrive').value=w.drive||'';
+    document.getElementById('mWebImg').value=w.img||'';
+    document.querySelector('#webinarModal .modal-title').textContent='Editar webinar';
+    document.querySelector('#webinarModal .btn-add').textContent='Guardar cambios';
+    openModal('webinarModal');
+  }
+  function editPdf(id){
+    var p=PDFS.find(x=>x.id===id);if(!p)return;
+    _editing.pdf=id;
+    document.getElementById('mPdfName').value=p.name||'';
+    document.getElementById('mPdfCat').value=p.cat||'Guía';
+    document.getElementById('mPdfPages').value=p.pages||'';
+    document.getElementById('mPdfDrive').value=p.drive||'';
+    document.getElementById('mPdfImg').value=p.img||'';
+    document.querySelector('#pdfModal .modal-title').textContent='Editar PDF';
+    document.querySelector('#pdfModal .btn-add').textContent='Guardar cambios';
+    openModal('pdfModal');
+  }
+  function editNoticia(id){
+    var n=NEWS.find(x=>x.id===id);if(!n)return;
+    _editing.noticia=id;
+    document.getElementById('mNewsTitle').value=n.title||'';
+    document.getElementById('mNewsCat').value=n.cat||'Novedad';
+    document.getElementById('mNewsAuthor').value=n.author||'';
+    document.getElementById('mNewsContent').value=n.content||'';
+    document.getElementById('mNewsDrive').value=n.drive||'';
+    document.querySelector('#noticiaModal .modal-title').textContent='Editar noticia';
+    document.querySelector('#noticiaModal .btn-add').textContent='Guardar cambios';
+    openModal('noticiaModal');
+  }
+  function resetEditMode(){
+    _editing={curso:null,webinar:null,pdf:null,noticia:null};
+    document.querySelectorAll('.modal-title').forEach(function(t){
+      if(t.textContent.startsWith('Editar')) t.textContent=t.textContent.replace('Editar','Nuevo');
+    });
+    document.querySelectorAll('.btn-add').forEach(function(b){
+      if(b.textContent==='Guardar cambios') b.textContent='Crear';
+    });
+  }
+
+  // ═══ NOTIFICACIONES ═══
+  const NOTIF_TYPES = {
+    curso: {label:'Nuevo curso', title:'📚 Nuevo curso disponible', color:'info'},
+    vivo: {label:'Clase en vivo', title:'🎥 Clase en vivo próximamente', color:'success'},
+    pdf: {label:'Nuevo PDF', title:'📄 Nuevo material disponible', color:'warn'},
+    promo: {label:'Promoción', title:'🏷️ Oferta especial', color:'danger'}
+  };
+  const DEFAULT_NOTIF_HISTORY = [
+    {id:'notif-default-1',type:'curso',title:'Nuevo curso: Hidrafacial Avanzado',msg:'Ya está disponible el curso completo con 4 clases.',recipients:4,date:'2026-04-25'},
+    {id:'notif-default-2',type:'vivo',title:'Webinar en 30 min: Peelings químicos',msg:'Únete al webinar con Dr. Miguel Castro. Link en la sección Webinars.',recipients:4,date:'2026-04-22'},
+    {id:'notif-default-3',type:'promo',title:'20% de descuento en consultas',msg:'Usa tu cupón CLUB20DERMA en tu próxima consulta presencial.',recipients:4,date:'2026-04-18'}
+  ];
+  let NOTIF_HISTORY = syncLoad(SYNC_KEYS.notifs) || DEFAULT_NOTIF_HISTORY;
+  function saveNotifs() { syncSave(SYNC_KEYS.notifs, NOTIF_HISTORY); }
+
+  function openNotifModal(type){
+    const config = NOTIF_TYPES[type];
+    document.getElementById('mNotifType').value = type;
+    document.getElementById('notifModalTitle').textContent = 'Enviar: ' + config.label;
+    document.getElementById('mNotifTitle').value = config.title;
+    document.getElementById('mNotifMsg').value = '';
+    document.getElementById('mNotifLink').value = '';
+    document.getElementById('notifRecipients').textContent = MEMBERS.filter(m=>m.status==='active').length;
+    openModal('notifModal');
+  }
+
+  function sendNotification(){
+    const type = document.getElementById('mNotifType').value;
+    const title = document.getElementById('mNotifTitle').value.trim();
+    const msg = document.getElementById('mNotifMsg').value.trim();
+    if(!title){showToast('Ingresa un título');return}
+    if(!msg){showToast('Escribe el mensaje');return}
+    const recipients = MEMBERS.filter(m=>m.status==='active').length;
+    NOTIF_HISTORY.unshift({id:'notif-'+Date.now(),type,title,msg,recipients,date:new Date().toISOString().split('T')[0]});
+    saveNotifs();
+    renderNotifHistory();
+    closeModals();
+    showToast('Notificación enviada a '+recipients+' miembros');
+  }
+
+  function renderNotifHistory(){
+    const el = document.getElementById('notifHistBody');
+    const count = document.getElementById('notifHistCount');
+    if(!el) return;
+    if(count) count.textContent = NOTIF_HISTORY.length + ' enviadas';
+    el.innerHTML = NOTIF_HISTORY.map(n => {
+      const cfg = NOTIF_TYPES[n.type] || {label:n.type,color:'neutral'};
+      return `<tr>
+        <td><span class="badge ${cfg.color}">${cfg.label}</span></td>
+        <td style="font-weight:600;">${n.title}</td>
+        <td style="color:var(--text-secondary);font-size:.85rem;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n.msg}</td>
+        <td>${n.recipients} miembros</td>
+        <td style="font-size:.82rem;color:var(--text-muted);">${n.date}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted);">Sin notificaciones enviadas.</td></tr>';
+  }
+
+  // ═══ DARK MODE ═══
+  function toggleDarkMode(){
+    document.body.classList.toggle('dark-mode');
+    const isDark=document.body.classList.contains('dark-mode');
+    sSet('dermalysse_admin_dark',isDark?'1':'0');
+    document.getElementById('darkLabel').textContent=isDark?'Claro':'Oscuro';
+    document.getElementById('darkIcon').innerHTML=isDark?'<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>':'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+    showToast(isDark?'Modo oscuro':'Modo claro');
+  }
+  function loadDarkMode(){
+    if(sGet('dermalysse_admin_dark')==='1'){
+      document.body.classList.add('dark-mode');
+      document.getElementById('darkLabel').textContent='Claro';
+      document.getElementById('darkIcon').innerHTML='<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+    }
+  }
+
+  // ═══ TOAST ═══
+  function showToast(msg){
+    const t=document.getElementById('toast');
+    document.getElementById('toastText').textContent=msg;
+    t.classList.add('show');
+    clearTimeout(window._tt);
+    window._tt=setTimeout(()=>t.classList.remove('show'),1800);
+  }
+
+  // ═══ CONFIGURACIÓN DINÁMICA DE PRECIOS ═══
+  window.guardarConfiguracionPrecios = async function(){
+    try {
+      const precioMes = parseInt(document.getElementById('cfg-precio-mes').value) || 200;
+      const precioAno = parseInt(document.getElementById('cfg-precio-ano').value) || 1799;
+
+      // Stripe no acepta cargos menores a $10 MXN
+      if (precioMes < 10 || precioAno < 10) {
+        showToast('El precio mínimo es $10 MXN (límite de Stripe)');
+        return;
+      }
+
+      await db.collection('config').doc('club').set({
+        precioMes,
+        precioAno,
+        actualizadoPor: (auth.currentUser && auth.currentUser.email) || 'admin',
+        actualizadoEn: new Date().toISOString()
+      }, { merge: true });
+
+      // Actualizar globales y dashboard al instante
+      window.__precioMes = precioMes;
+      window.__precioAno = precioAno;
+      try { if (typeof renderDashboard === 'function') renderDashboard(); } catch(e) {}
+
+      showToast('Configuración guardada · Los precios se aplicarán a nuevos checkouts');
+      console.log('✅ Precios guardados:', { precioMes, precioAno });
+    } catch (e) {
+      showToast('Error al guardar: ' + e.message);
+      console.error('Config error:', e);
+    }
+  };
+
+  // Cargar precios al abrir la vista de config
+  async function cargarConfiguracionPrecios(){
+    try {
+      const snap = await db.collection('config').doc('club').get();
+      const c = snap.exists ? snap.data() : {};
+      // Globales usados por el dashboard (KPI de ingreso mensual)
+      window.__precioMes = Number(c.precioMes) > 0 ? Number(c.precioMes) : 200;
+      window.__precioAno = Number(c.precioAno) > 0 ? Number(c.precioAno) : 1799;
+      const inMes = document.getElementById('cfg-precio-mes');
+      const inAno = document.getElementById('cfg-precio-ano');
+      if (inMes) inMes.value = window.__precioMes;
+      if (inAno) inAno.value = window.__precioAno;
+      // Re-renderizar dashboard con los precios reales
+      try { if (typeof renderDashboard === 'function') renderDashboard(); } catch(e) {}
+    } catch (e) {
+      console.warn('[Admin] config load:', e.message);
+    }
+  }
+
+  // Hook: cargar precios cuando se navega a config
+  const originalGoTo = window.goTo || function(){};
+  window.goTo = async function(section){
+    originalGoTo.call(this, section);
+    if(section === 'config') {
+      setTimeout(() => cargarConfiguracionPrecios(), 100);
+    }
+  };
+
+  // Cargar precios al inicializar
+  window.addEventListener('load', () => {
+    setTimeout(() => cargarConfiguracionPrecios(), 500);
+  });
+</script>
+</body>
+</html>
