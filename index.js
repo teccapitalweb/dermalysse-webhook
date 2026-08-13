@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 
 // ═══ FIREBASE ADMIN ═══
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
@@ -9,6 +10,13 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
 });
 const db = admin.firestore();
+
+// ═══ BUNNY STREAM ═══
+// BUNNY_STREAM_TOKEN_KEY es la "Token authentication key" de Security.
+// No es la Stream API Key utilizada para administrar o subir videos.
+const BUNNY_STREAM_LIBRARY_ID = String(process.env.BUNNY_STREAM_LIBRARY_ID || '').trim();
+const BUNNY_STREAM_TOKEN_KEY = String(process.env.BUNNY_STREAM_TOKEN_KEY || '').trim();
+const BUNNY_TOKEN_TTL_SECONDS = Math.min(600, Math.max(60, Number(process.env.BUNNY_TOKEN_TTL_SECONDS) || 300));
 
 // ═══ EMAIL (EmailJS API — Club Dermalysse) ═══
 const ADMIN_EMAIL = 'teccapitalweb@gmail.com';
@@ -386,6 +394,107 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 // ═══ JSON parser (para las demás rutas) ═══
 app.use(express.json());
 
+// ═══ BUNNY: autenticación de socia + enlace temporal ═══
+async function requireFirebaseUser(req) {
+  const authorization = req.headers.authorization || '';
+  const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+  if (!token) {
+    const error = new Error('Falta el token de autenticación');
+    error.statusCode = 401;
+    throw error;
+  }
+  try {
+    return await admin.auth().verifyIdToken(token);
+  } catch (_) {
+    const error = new Error('La sesión es inválida o venció');
+    error.statusCode = 401;
+    throw error;
+  }
+}
+
+function fechaValida(value) {
+  if (!value) return null;
+  if (typeof value.toDate === 'function') return value.toDate();
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function requireDermalysseAccess(req) {
+  const decoded = await requireFirebaseUser(req);
+  const [adminDoc, userDoc] = await Promise.all([
+    db.collection('admins').doc(decoded.uid).get(),
+    db.collection('users').doc(decoded.uid).get()
+  ]);
+  if (adminDoc.exists) return decoded;
+  if (!userDoc.exists) {
+    const error = new Error('No existe una membresía para esta cuenta');
+    error.statusCode = 403;
+    throw error;
+  }
+  const userData = userDoc.data() || {};
+  const activeSubscription = userData.subscription?.status === 'active';
+  const courtesyUntil = fechaValida(userData.vigenciaHasta);
+  const activeCourtesy = courtesyUntil && courtesyUntil.getTime() > Date.now();
+  if (!activeSubscription && !activeCourtesy) {
+    const error = new Error('La membresía no está activa');
+    error.statusCode = 403;
+    throw error;
+  }
+  return decoded;
+}
+
+let bunnyCatalogCache = { expiresAt: 0, ids: new Set() };
+async function getAllowedBunnyVideoIds() {
+  if (Date.now() < bunnyCatalogCache.expiresAt && bunnyCatalogCache.ids.size) {
+    return bunnyCatalogCache.ids;
+  }
+  const snapshot = await db.collection('courses').get();
+  const ids = new Set();
+  snapshot.docs.forEach(docSnapshot => {
+    const lessons = docSnapshot.data()?.lessons;
+    if (!Array.isArray(lessons)) return;
+    lessons.forEach(lesson => {
+      if (lesson && typeof lesson.videoId === 'string') ids.add(lesson.videoId.toLowerCase());
+    });
+  });
+  bunnyCatalogCache = { expiresAt: Date.now() + 60_000, ids };
+  return ids;
+}
+
+app.post('/api/bunny/embed-token', async (req, res) => {
+  try {
+    await requireDermalysseAccess(req);
+    if (!BUNNY_STREAM_LIBRARY_ID || !BUNNY_STREAM_TOKEN_KEY) {
+      const error = new Error('Bunny Stream no está configurado en Railway');
+      error.statusCode = 503;
+      throw error;
+    }
+    const videoId = String(req.body?.videoId || '').trim().toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(videoId)) {
+      const error = new Error('Video ID inválido');
+      error.statusCode = 400;
+      throw error;
+    }
+    const allowedIds = await getAllowedBunnyVideoIds();
+    if (!allowedIds.has(videoId)) {
+      const error = new Error('El video no pertenece al catálogo publicado');
+      error.statusCode = 404;
+      throw error;
+    }
+    const expires = Math.floor(Date.now() / 1000) + BUNNY_TOKEN_TTL_SECONDS;
+    const token = crypto.createHash('sha256')
+      .update(BUNNY_STREAM_TOKEN_KEY + videoId + expires)
+      .digest('hex');
+    const embedUrl = `https://iframe.mediadelivery.net/embed/${encodeURIComponent(BUNNY_STREAM_LIBRARY_ID)}/${videoId}?token=${token}&expires=${expires}`;
+    res.set('Cache-Control', 'no-store, private');
+    return res.json({ embedUrl, expires });
+  } catch (error) {
+    const status = error.statusCode || 500;
+    if (status >= 500) console.error('[Bunny token]', error.message);
+    return res.status(status).json({ error: error.message || 'No se pudo autorizar el video' });
+  }
+});
+
 // ═══ CREAR CHECKOUT SESSION CON PRECIO DINÁMICO ═══
 // ¡CAMBIO PRINCIPAL! En vez de recibir un priceId fijo, ahora calculamos
 // el precio dinámicamente desde Firestore según el plan elegido.
@@ -614,7 +723,12 @@ app.post('/check-subscription', async (req, res) => {
 
 // ═══ HEALTH CHECK ═══
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'Dermalysse Webhook Server (con precios dinámicos)' });
+  res.json({
+    status: 'ok',
+    service: 'Dermalysse Webhook Server (con precios dinámicos)',
+    bunnyStream: BUNNY_STREAM_LIBRARY_ID && BUNNY_STREAM_TOKEN_KEY ? 'configured' : 'missing-config',
+    bunnyLibraryId: BUNNY_STREAM_LIBRARY_ID || null
+  });
 });
 
 // ═══ START ═══

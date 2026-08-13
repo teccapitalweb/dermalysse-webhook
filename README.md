@@ -5,6 +5,7 @@
 - Recibe webhooks de Stripe (pago exitoso, cancelación, renovación)
 - Actualiza Firestore automáticamente con el estado de la suscripción
 - Crea sesiones del portal de Stripe (para que los usuarios gestionen/cancelen)
+- Autoriza la reproducción protegida de clases desde Bunny Stream
 
 ---
 
@@ -22,12 +23,22 @@
 En Railway → tu proyecto → Variables, agregar:
 
 ```
-STRIPE_SECRET_KEY = sk_test_51TMAcSA7If2CqXs9FocM4SntWBhV0F5K0rnR1Fp8Tbzn6cvNdqSW7UHlctZEiNcsDohsJU7QHoSvrvA23SQHAXp70040RkWo80
+STRIPE_SECRET_KEY = sk_test_...
 
 STRIPE_WEBHOOK_SECRET = (se obtiene en el Paso 4)
 
 FIREBASE_SERVICE_ACCOUNT = (se obtiene en el Paso 5)
+
+BUNNY_STREAM_LIBRARY_ID = (ID numérico de la biblioteca Membresia-Dermalyssee)
+
+BUNNY_STREAM_TOKEN_KEY = (Token authentication key de Security; no la Stream API Key)
+
+BUNNY_TOKEN_TTL_SECONDS = 300
 ```
+
+La clave privada de Bunny nunca se coloca en el HTML. El navegador obtiene un
+enlace temporal después de que Railway valida la sesión de Firebase y la
+membresía activa o la cortesía vigente.
 
 ## Paso 4: Configurar Webhook en Stripe
 1. Ir a Stripe Dashboard → Developers → Webhooks
