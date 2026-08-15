@@ -1,0 +1,8 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and generated output
+node_modules/
+npm-debug.log*

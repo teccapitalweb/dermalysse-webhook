@@ -1,86 +1,52 @@
-# Dermalysse Webhook Server — Deploy en Railway
+# Backend del Club Dermalysse
 
-## Qué hace este servidor
-- Crea sesiones de Stripe Checkout (para que los usuarios paguen)
-- Recibe webhooks de Stripe (pago exitoso, cancelación, renovación)
-- Actualiza Firestore automáticamente con el estado de la suscripción
-- Crea sesiones del portal de Stripe (para que los usuarios gestionen/cancelen)
-- Autoriza la reproducción protegida de clases desde Bunny Stream
+Servicio Express para webhooks y operaciones de Stripe, consulta de membresía y reproducción temporal protegida desde Bunny Stream.
 
----
+## Funciones
 
-## Paso 1: Subir a GitHub
-1. Crear un nuevo repositorio en GitHub (ej: `dermalysse-webhook`)
-2. Subir los archivos `index.js` y `package.json`
+- Crea sesiones de Stripe Checkout y del portal de clientes.
+- Procesa webhooks de pagos, renovaciones y cancelaciones.
+- Actualiza la membresía en Firestore.
+- Verifica Firebase ID tokens en todas las rutas sensibles.
+- Autoriza vistas previas gratuitas y clases premium de Bunny Stream.
 
-## Paso 2: Deploy en Railway
-1. Ir a [railway.app](https://railway.app)
-2. Click "New Project" → "Deploy from GitHub"
-3. Seleccionar el repositorio que creaste
-4. Railway detectará Node.js automáticamente
+## Configuración
 
-## Paso 3: Configurar variables de entorno
-En Railway → tu proyecto → Variables, agregar:
+Configura las variables descritas en `.env.example` directamente en Railway o en un archivo `.env` local. Nunca agregues valores reales al repositorio.
 
-```
-STRIPE_SECRET_KEY = sk_test_...
+Variables principales:
 
-STRIPE_WEBHOOK_SECRET = (se obtiene en el Paso 4)
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `FIREBASE_SERVICE_ACCOUNT`
+- `BUNNY_STREAM_LIBRARY_ID`
+- `BUNNY_STREAM_TOKEN_KEY`, `BUNNY_STREAM_TOKEN_AUTH_KEY` o la clave compatible configurada para la biblioteca
+- `BUNNY_STREAM_TOKEN_TTL_SECONDS`
 
-FIREBASE_SERVICE_ACCOUNT = (se obtiene en el Paso 5)
+Las variables de EmailJS son opcionales. Si no existen, las notificaciones por correo se omiten sin afectar pagos ni reproducción.
 
-BUNNY_STREAM_LIBRARY_ID = (ID numérico de la biblioteca Membresia-Dermalyssee)
+## Ejecución local
 
-BUNNY_STREAM_TOKEN_KEY = (Token authentication key de Security; no la Stream API Key)
-
-BUNNY_TOKEN_TTL_SECONDS = 300
+```bash
+npm install
+npm start
 ```
 
-La clave privada de Bunny nunca se coloca en el HTML. El navegador obtiene un
-enlace temporal después de que Railway valida la sesión de Firebase y la
-membresía activa o la cortesía vigente.
+## Webhook de Stripe
 
-## Paso 4: Configurar Webhook en Stripe
-1. Ir a Stripe Dashboard → Developers → Webhooks
-2. Click "Add endpoint"
-3. URL: `https://TU-APP.railway.app/webhook` (la URL que Railway te da)
-4. Eventos a escuchar:
-   - `checkout.session.completed`
-   - `customer.subscription.updated`
-   - `customer.subscription.deleted`
-   - `invoice.payment_succeeded`
-   - `invoice.payment_failed`
-5. Click "Add endpoint"
-6. Copiar el "Signing secret" (empieza con `whsec_`)
-7. Pegar como `STRIPE_WEBHOOK_SECRET` en Railway
+Configura en Stripe el endpoint desplegado terminado en `/webhook` y guarda su signing secret únicamente como `STRIPE_WEBHOOK_SECRET` en Railway.
 
-## Paso 5: Firebase Service Account
-1. Ir a Firebase Console → ⚙️ Configuración del proyecto → Cuentas de servicio
-2. Click "Generar nueva clave privada"
-3. Se descarga un archivo JSON
-4. Copiar TODO el contenido del JSON
-5. Pegar como valor de `FIREBASE_SERVICE_ACCOUNT` en Railway (en una sola línea)
+## Reproducción Bunny
 
-## Paso 6: Actualizar la URL en el Club
-Una vez que Railway te dé la URL (ej: `https://dermalysse-webhook-production.up.railway.app`):
-1. Abrir `index.html` del Club
-2. Buscar: `const WEBHOOK_SERVER = '';`
-3. Reemplazar por: `const WEBHOOK_SERVER = 'https://TU-URL.railway.app';`
-4. Subir a GitHub
+El Club solicita `POST /bunny/playback` con un Firebase ID token y los identificadores internos de curso y clase. El servidor valida que el recurso pertenezca al catálogo y genera un embed firmado de corta duración.
 
----
+Una clase marcada `isPreview: true` está disponible para cualquier usuario registrado. Las demás requieren membresía vigente o cortesía vigente. El endpoint anterior `/api/bunny/embed-token` se conserva temporalmente para compatibilidad durante la actualización del frontend.
 
-## Probar
-1. Abrir el Club → ir a "Mi Suscripción"
-2. Click "Suscribirme mensual" o "Suscribirme anual"
-3. Usar tarjeta de prueba: `4242 4242 4242 4242` (cualquier fecha futura, cualquier CVC)
-4. Debe regresar al Club con pantalla de gracias + confeti
-5. Verificar en Firestore que el usuario tiene `subscription.status: 'active'`
+El catálogo local de respaldo está en `data/dermalysse-courses.json` y no contiene credenciales ni URLs premium estables.
 
-## Pasar a producción
-Cuando todo funcione:
-1. En Railway: cambiar `STRIPE_SECRET_KEY` a `sk_live_...`
-2. En Stripe: crear webhook apuntando a la misma URL pero en modo Live
-3. Actualizar `STRIPE_WEBHOOK_SECRET` con el nuevo signing secret
-4. En el Club: cambiar `STRIPE_PK` a `pk_live_...`
-5. Crear los mismos productos/precios en Stripe Live y actualizar los Price IDs
+## Seguridad operativa
+
+- Revoca cualquier credencial que haya estado expuesta previamente.
+- Mantén `.env` fuera de Git.
+- Las rutas de checkout, cancelación, reactivación, portal y consulta usan el UID verificado del token; no confían en un UID enviado por el navegador.
+- CORS se limita al dominio del Club y a los orígenes locales de desarrollo.

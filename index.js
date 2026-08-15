@@ -1,8 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const crypto = require('crypto');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin = require('firebase-admin');
-const crypto = require('crypto');
+const bundledCourseCatalog = require('./data/dermalysse-courses.json');
 
 // ═══ FIREBASE ADMIN ═══
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
@@ -15,17 +16,26 @@ const db = admin.firestore();
 // BUNNY_STREAM_TOKEN_KEY es la "Token authentication key" de Security.
 // No es la Stream API Key utilizada para administrar o subir videos.
 const BUNNY_STREAM_LIBRARY_ID = String(process.env.BUNNY_STREAM_LIBRARY_ID || '').trim();
-const BUNNY_STREAM_TOKEN_KEY = String(process.env.BUNNY_STREAM_TOKEN_KEY || '').trim();
-const BUNNY_TOKEN_TTL_SECONDS = Math.min(600, Math.max(60, Number(process.env.BUNNY_TOKEN_TTL_SECONDS) || 300));
+const BUNNY_STREAM_TOKEN_KEY = [
+  process.env.BUNNY_STREAM_TOKEN_KEY,
+  process.env.BUNNY_STREAM_TOKEN_SECURITY_KEY,
+  process.env.BUNNY_STREAM_TOKEN_AUTH_KEY,
+  process.env.BUNNY_STREAM_API_KEY
+].map(value => String(value || '').trim()).find(value => value && !/^PEGA_AQUI/i.test(value)) || '';
+const BUNNY_TOKEN_TTL_SECONDS = Math.min(600, Math.max(60, Number(process.env.BUNNY_TOKEN_TTL_SECONDS || process.env.BUNNY_STREAM_TOKEN_TTL_SECONDS) || 300));
 
 // ═══ EMAIL (EmailJS API — Club Dermalysse) ═══
-const ADMIN_EMAIL = 'teccapitalweb@gmail.com';
-const EMAILJS_SERVICE_ID = 'service_i8pm87h';
-const EMAILJS_TEMPLATE_ID = 'template_0xcszxa';
-const EMAILJS_PUBLIC_KEY = 'iIBc65PznIzD84KgR';
-const EMAILJS_PRIVATE_KEY = '75xg9N1EQU1Cy2MEfK75k';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
+const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID || '';
+const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID || '';
+const EMAILJS_PUBLIC_KEY = process.env.EMAILJS_PUBLIC_KEY || '';
+const EMAILJS_PRIVATE_KEY = process.env.EMAILJS_PRIVATE_KEY || '';
 
 async function sendEmail(to, subject, html) {
+  if (!to || !EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY || !EMAILJS_PRIVATE_KEY) {
+    console.warn('Email omitido: integración no configurada en el entorno');
+    return;
+  }
   try {
     const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
@@ -133,8 +143,21 @@ async function leerPreciosConfig() {
 const app = express();
 
 // ═══ CORS ═══
+const allowedOrigins = new Set([
+  'https://club.dermalyssemx.com',
+  'https://teccapitalweb.github.io',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:3010',
+  'http://127.0.0.1:3010'
+]);
+
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.has(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
@@ -394,121 +417,104 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 // ═══ JSON parser (para las demás rutas) ═══
 app.use(express.json());
 
-// ═══ BUNNY: autenticación de socia + enlace temporal ═══
-async function requireFirebaseUser(req) {
-  const authorization = req.headers.authorization || '';
-  const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
-  if (!token) {
-    const error = new Error('Falta el token de autenticación');
-    error.statusCode = 401;
-    throw error;
-  }
+// ═══ AUTENTICACIÓN FIREBASE PARA RECURSOS PROTEGIDOS ═══
+async function requireFirebaseUser(req, res, next) {
   try {
-    return await admin.auth().verifyIdToken(token);
-  } catch (_) {
-    const error = new Error('La sesión es inválida o venció');
-    error.statusCode = 401;
-    throw error;
+    const authorization = String(req.headers.authorization || '');
+    const match = authorization.match(/^Bearer\s+(.+)$/i);
+    if (!match) return res.status(401).json({ error: 'Inicia sesión para continuar' });
+    req.firebaseUser = await admin.auth().verifyIdToken(match[1]);
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'La sesión no es válida o expiró' });
   }
 }
 
-function fechaValida(value) {
-  if (!value) return null;
-  if (typeof value.toDate === 'function') return value.toDate();
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+function hasCurrentMembership(userData) {
+  const now = Date.now();
+  const courtesyUntil = Date.parse(userData.vigenciaHasta || '');
+  if (Number.isFinite(courtesyUntil) && courtesyUntil > now) return true;
+
+  const subscription = userData.subscription || {};
+  const periodEnd = Date.parse(subscription.currentPeriodEnd || '');
+  if (['active', 'trialing'].includes(subscription.status)) {
+    return !Number.isFinite(periodEnd) || periodEnd > now;
+  }
+  if ((subscription.status === 'canceled' || subscription.cancelAtPeriodEnd === true) && Number.isFinite(periodEnd)) {
+    return periodEnd > now;
+  }
+  return false;
 }
 
-async function requireDermalysseAccess(req) {
-  const decoded = await requireFirebaseUser(req);
-  const [adminDoc, userDoc] = await Promise.all([
-    db.collection('admins').doc(decoded.uid).get(),
-    db.collection('users').doc(decoded.uid).get()
-  ]);
-  if (adminDoc.exists) return decoded;
-  if (!userDoc.exists) {
-    const error = new Error('No existe una membresía para esta cuenta');
-    error.statusCode = 403;
-    throw error;
-  }
-  const userData = userDoc.data() || {};
-  const activeSubscription = userData.subscription?.status === 'active';
-  const courtesyUntil = fechaValida(userData.vigenciaHasta);
-  const activeCourtesy = courtesyUntil && courtesyUntil.getTime() > Date.now();
-  if (!activeSubscription && !activeCourtesy) {
-    const error = new Error('La membresía no está activa');
-    error.statusCode = 403;
-    throw error;
-  }
-  return decoded;
+async function findCourse(courseId) {
+  const snapshot = await db.collection('courses').doc(courseId).get();
+  if (snapshot.exists) return { id: snapshot.id, ...snapshot.data() };
+  return bundledCourseCatalog.find(course => course.id === courseId) || null;
 }
 
-let bunnyCatalogCache = { expiresAt: 0, ids: new Set() };
-async function getAllowedBunnyVideoIds() {
-  if (Date.now() < bunnyCatalogCache.expiresAt && bunnyCatalogCache.ids.size) {
-    return bunnyCatalogCache.ids;
+async function findLessonByVideoId(videoId) {
+  for (const course of bundledCourseCatalog) {
+    const lesson = Array.isArray(course.lessons)
+      ? course.lessons.find(item => String(item.videoId || '').toLowerCase() === videoId)
+      : null;
+    if (lesson) return lesson;
   }
   const snapshot = await db.collection('courses').get();
-  const ids = new Set();
-  snapshot.docs.forEach(docSnapshot => {
+  for (const docSnapshot of snapshot.docs) {
     const lessons = docSnapshot.data()?.lessons;
-    if (!Array.isArray(lessons)) return;
-    lessons.forEach(lesson => {
-      if (lesson && typeof lesson.videoId === 'string') ids.add(lesson.videoId.toLowerCase());
-    });
-  });
-  bunnyCatalogCache = { expiresAt: Date.now() + 60_000, ids };
-  return ids;
+    const lesson = Array.isArray(lessons)
+      ? lessons.find(item => String(item.videoId || '').toLowerCase() === videoId)
+      : null;
+    if (lesson) return lesson;
+  }
+  return null;
 }
 
-app.post('/api/bunny/embed-token', async (req, res) => {
+// Compatibilidad temporal con el reproductor publicado anteriormente.
+app.post('/api/bunny/embed-token', requireFirebaseUser, async (req, res) => {
   try {
-    await requireDermalysseAccess(req);
     if (!BUNNY_STREAM_LIBRARY_ID || !BUNNY_STREAM_TOKEN_KEY) {
-      const error = new Error('Bunny Stream no está configurado en Railway');
-      error.statusCode = 503;
-      throw error;
+      return res.status(503).json({ error: 'Bunny Stream no está configurado en Railway' });
     }
     const videoId = String(req.body?.videoId || '').trim().toLowerCase();
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(videoId)) {
-      const error = new Error('Video ID inválido');
-      error.statusCode = 400;
-      throw error;
+    if (!/^[0-9a-f-]{36}$/.test(videoId)) {
+      return res.status(400).json({ error: 'Video ID inválido' });
     }
-    const allowedIds = await getAllowedBunnyVideoIds();
-    if (!allowedIds.has(videoId)) {
-      const error = new Error('El video no pertenece al catálogo publicado');
-      error.statusCode = 404;
-      throw error;
+    const lesson = await findLessonByVideoId(videoId);
+    if (!lesson) return res.status(404).json({ error: 'El video no pertenece al catálogo publicado' });
+    if (!lesson.isPreview) {
+      const [adminDoc, userDoc] = await Promise.all([
+        db.collection('admins').doc(req.firebaseUser.uid).get(),
+        db.collection('users').doc(req.firebaseUser.uid).get()
+      ]);
+      const userData = userDoc.exists ? userDoc.data() : {};
+      if (!adminDoc.exists && !hasCurrentMembership(userData)) {
+        return res.status(403).json({ error: 'Esta clase requiere una membresía vigente' });
+      }
     }
     const expires = Math.floor(Date.now() / 1000) + BUNNY_TOKEN_TTL_SECONDS;
-    const token = crypto.createHash('sha256')
-      .update(BUNNY_STREAM_TOKEN_KEY + videoId + expires)
-      .digest('hex');
+    const token = crypto.createHash('sha256').update(BUNNY_STREAM_TOKEN_KEY + videoId + expires).digest('hex');
     const embedUrl = `https://iframe.mediadelivery.net/embed/${encodeURIComponent(BUNNY_STREAM_LIBRARY_ID)}/${videoId}?token=${token}&expires=${expires}`;
     res.set('Cache-Control', 'no-store, private');
-    return res.json({ embedUrl, expires });
+    return res.json({ embedUrl, expires, preview: !!lesson.isPreview });
   } catch (error) {
-    const status = error.statusCode || 500;
-    if (status >= 500) console.error('[Bunny token]', error.message);
-    return res.status(status).json({ error: error.message || 'No se pudo autorizar el video' });
+    console.error('[Bunny token]', error.message);
+    return res.status(500).json({ error: 'No se pudo autorizar el video' });
   }
 });
 
 // ═══ CREAR CHECKOUT SESSION CON PRECIO DINÁMICO ═══
 // ¡CAMBIO PRINCIPAL! En vez de recibir un priceId fijo, ahora calculamos
 // el precio dinámicamente desde Firestore según el plan elegido.
-app.post('/create-checkout-session', async (req, res) => {
+app.post('/create-checkout-session', requireFirebaseUser, async (req, res) => {
   try {
-    const { plan, firebaseUid, email, successUrl, cancelUrl } = req.body;
+    const { plan, successUrl, cancelUrl } = req.body;
+    const firebaseUid = req.firebaseUser.uid;
+    const email = req.firebaseUser.email || '';
 
     // Validar plan
     if (!['mensual', 'anual'].includes(plan)) {
       return res.status(400).json({ error: 'Plan inválido (mensual o anual)' });
-    }
-
-    if (!firebaseUid) {
-      return res.status(400).json({ error: 'firebaseUid requerido' });
     }
 
     // ← LEE PRECIOS DEL ADMIN (dinámico desde Firestore)
@@ -568,10 +574,9 @@ app.post('/create-checkout-session', async (req, res) => {
 });
 
 // ═══ CANCELAR SUSCRIPCIÓN (al final del período) ═══
-app.post('/cancel-subscription', async (req, res) => {
+app.post('/cancel-subscription', requireFirebaseUser, async (req, res) => {
   try {
-    const { firebaseUid } = req.body;
-    if (!firebaseUid) return res.status(400).json({ error: 'firebaseUid requerido' });
+    const firebaseUid = req.firebaseUser.uid;
 
     const userDoc = await db.collection('users').doc(firebaseUid).get();
     const userData = userDoc.exists ? userDoc.data() : {};
@@ -626,10 +631,9 @@ app.post('/cancel-subscription', async (req, res) => {
 });
 
 // ═══ REACTIVAR SUSCRIPCIÓN ═══
-app.post('/reactivate-subscription', async (req, res) => {
+app.post('/reactivate-subscription', requireFirebaseUser, async (req, res) => {
   try {
-    const { firebaseUid } = req.body;
-    if (!firebaseUid) return res.status(400).json({ error: 'firebaseUid requerido' });
+    const firebaseUid = req.firebaseUser.uid;
 
     const userDoc = await db.collection('users').doc(firebaseUid).get();
     const userData = userDoc.exists ? userDoc.data() : {};
@@ -678,9 +682,10 @@ app.post('/reactivate-subscription', async (req, res) => {
 });
 
 // ═══ CREAR PORTAL SESSION ═══
-app.post('/create-portal-session', async (req, res) => {
+app.post('/create-portal-session', requireFirebaseUser, async (req, res) => {
   try {
-    const { firebaseUid, returnUrl } = req.body;
+    const { returnUrl } = req.body;
+    const firebaseUid = req.firebaseUser.uid;
 
     const userDoc = await db.collection('users').doc(firebaseUid).get();
     const userData = userDoc.exists ? userDoc.data() : {};
@@ -703,9 +708,9 @@ app.post('/create-portal-session', async (req, res) => {
 });
 
 // ═══ VERIFICAR SUSCRIPCIÓN ═══
-app.post('/check-subscription', async (req, res) => {
+app.post('/check-subscription', requireFirebaseUser, async (req, res) => {
   try {
-    const { firebaseUid } = req.body;
+    const firebaseUid = req.firebaseUser.uid;
     const userDoc = await db.collection('users').doc(firebaseUid).get();
     const userData = userDoc.exists ? userDoc.data() : {};
     const sub = userData.subscription || {};
@@ -718,6 +723,59 @@ app.post('/check-subscription', async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══ REPRODUCCIÓN FIRMADA BUNNY STREAM ═══
+// Solo recibe IDs de contenido. La clave de firma nunca sale del servidor.
+app.post('/bunny/playback', requireFirebaseUser, async (req, res) => {
+  try {
+    const courseId = String(req.body.courseId || '');
+    const lessonId = String(req.body.lessonId || '');
+    if (!courseId || !lessonId) {
+      return res.status(400).json({ error: 'Curso y clase requeridos' });
+    }
+
+    const course = await findCourse(courseId);
+    const lesson = course && Array.isArray(course.lessons)
+      ? course.lessons.find(item => String(item.id || '') === lessonId)
+      : null;
+    if (!course || !lesson || !lesson.videoId) {
+      return res.status(404).json({ error: 'La clase no está disponible' });
+    }
+
+    if (!lesson.isPreview) {
+      const userSnapshot = await db.collection('users').doc(req.firebaseUser.uid).get();
+      const userData = userSnapshot.exists ? userSnapshot.data() : {};
+      if (!hasCurrentMembership(userData)) {
+        return res.status(403).json({ error: 'Esta clase requiere una membresía vigente' });
+      }
+    }
+
+    const libraryId = String(process.env.BUNNY_STREAM_LIBRARY_ID || '');
+    const tokenKey = [
+      process.env.BUNNY_STREAM_TOKEN_SECURITY_KEY,
+      process.env.BUNNY_STREAM_TOKEN_AUTH_KEY,
+      process.env.BUNNY_STREAM_API_KEY
+    ].map(value => String(value || '').trim()).find(value => value && !/^PEGA_AQUI/i.test(value)) || '';
+    if (!libraryId || !tokenKey) {
+      return res.status(503).json({ error: 'La reproducción segura todavía no está configurada' });
+    }
+
+    const requestedTtl = Number(process.env.BUNNY_STREAM_TOKEN_TTL_SECONDS || 300);
+    const tokenTtl = Math.min(600, Math.max(60, Number.isFinite(requestedTtl) ? requestedTtl : 300));
+    const expires = Math.floor(Date.now() / 1000) + tokenTtl;
+    const token = crypto
+      .createHash('sha256')
+      .update(tokenKey + lesson.videoId + expires)
+      .digest('hex');
+    const embedUrl = `https://iframe.mediadelivery.net/embed/${encodeURIComponent(libraryId)}/${encodeURIComponent(lesson.videoId)}?token=${token}&expires=${expires}&autoplay=true`;
+
+    res.set('Cache-Control', 'no-store');
+    res.json({ embedUrl, expires, preview: !!lesson.isPreview });
+  } catch (error) {
+    console.error('Bunny playback error:', error.message);
+    res.status(500).json({ error: 'No fue posible preparar la reproducción' });
   }
 });
 
