@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin = require('firebase-admin');
 const bundledCourseCatalog = require('./data/dermalysse-courses.json');
+const { hasCurrentMembership, membershipAccess } = require('./access-policy');
 
 // ═══ FIREBASE ADMIN ═══
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
@@ -430,22 +431,6 @@ async function requireFirebaseUser(req, res, next) {
   }
 }
 
-function hasCurrentMembership(userData) {
-  const now = Date.now();
-  const courtesyUntil = Date.parse(userData.vigenciaHasta || '');
-  if (Number.isFinite(courtesyUntil) && courtesyUntil > now) return true;
-
-  const subscription = userData.subscription || {};
-  const periodEnd = Date.parse(subscription.currentPeriodEnd || '');
-  if (['active', 'trialing'].includes(subscription.status)) {
-    return !Number.isFinite(periodEnd) || periodEnd > now;
-  }
-  if ((subscription.status === 'canceled' || subscription.cancelAtPeriodEnd === true) && Number.isFinite(periodEnd)) {
-    return periodEnd > now;
-  }
-  return false;
-}
-
 async function findCourse(courseId) {
   const snapshot = await db.collection('courses').doc(courseId).get();
   if (snapshot.exists) return { id: snapshot.id, ...snapshot.data() };
@@ -715,11 +700,15 @@ app.post('/check-subscription', requireFirebaseUser, async (req, res) => {
     const userData = userDoc.exists ? userDoc.data() : {};
     const sub = userData.subscription || {};
 
+    const access = membershipAccess(userData);
     res.json({
       status: sub.status || 'none',
       plan: sub.plan || null,
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd || false,
-      currentPeriodEnd: sub.currentPeriodEnd || null
+      currentPeriodEnd: sub.currentPeriodEnd || null,
+      hasAccess: access.allowed,
+      accessReason: access.reason,
+      vigenciaHasta: userData.vigenciaHasta || null
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -789,9 +778,82 @@ app.get('/', (req, res) => {
   });
 });
 
+const BUNDLED_CATALOG_VERSION = 'bunny-2026-08-12';
+
+async function ensureBundledCatalog() {
+  const stateRef = db.collection('config').doc('contentCatalog');
+  const stateSnapshot = await stateRef.get();
+  const current = stateSnapshot.exists ? stateSnapshot.data() : {};
+  if (current.version === BUNDLED_CATALOG_VERSION && current.courseCount === bundledCourseCatalog.length) {
+    const courseRefs = bundledCourseCatalog.map(course => db.collection('courses').doc(course.id));
+    const courseSnapshots = await db.getAll(...courseRefs);
+    const complete = courseSnapshots.every((snapshot, index) => {
+      if (!snapshot.exists) return false;
+      const data = snapshot.data();
+      const expectedLessons = bundledCourseCatalog[index].lessons || [];
+      return data.catalogVersion === BUNDLED_CATALOG_VERSION
+        && data.status === 'published'
+        && Array.isArray(data.lessons)
+        && data.lessons.length === expectedLessons.length
+        && data.lessons.filter(lesson => lesson.isPreview === true).length === 1;
+    });
+    if (complete) return { changed: false, courseCount: bundledCourseCatalog.length };
+  }
+
+  const batch = db.batch();
+  let videoCount = 0;
+  let previewCount = 0;
+  const activeCourseIds = [];
+  bundledCourseCatalog.forEach(course => {
+    const lessons = Array.isArray(course.lessons) ? course.lessons : [];
+    videoCount += lessons.length;
+    previewCount += lessons.filter(lesson => lesson.isPreview === true).length;
+    activeCourseIds.push(course.id);
+    batch.set(db.collection('courses').doc(course.id), {
+      ...course,
+      catalogVersion: BUNDLED_CATALOG_VERSION,
+      catalogManaged: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+  batch.set(stateRef, {
+    version: BUNDLED_CATALOG_VERSION,
+    source: 'bundled-bunny-catalog',
+    courseCount: bundledCourseCatalog.length,
+    videoCount,
+    previewCount,
+    activeCourseIds,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+  await batch.commit();
+  return { changed: true, courseCount: bundledCourseCatalog.length, videoCount, previewCount };
+}
+
+app.get('/catalog/status', async (req, res) => {
+  try {
+    const snapshot = await db.collection('config').doc('contentCatalog').get();
+    const data = snapshot.exists ? snapshot.data() : {};
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      status: data.version === BUNDLED_CATALOG_VERSION ? 'ready' : 'pending',
+      version: data.version || null,
+      courseCount: data.courseCount || 0,
+      videoCount: data.videoCount || 0,
+      previewCount: data.previewCount || 0
+    });
+  } catch (error) {
+    res.status(503).json({ status: 'unavailable' });
+  }
+});
+
 // ═══ START ═══
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Dermalysse webhook server running on port ${PORT}`);
-  console.log('💡 Precios dinámicos habilitados (leer desde config/club en Firestore)');
-});
+ensureBundledCatalog()
+  .then(result => console.log('📚 Catálogo Firestore verificado:', result))
+  .catch(error => console.error('Catalog sync error:', error.message))
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`🚀 Dermalysse webhook server running on port ${PORT}`);
+      console.log('💡 Precios dinámicos habilitados (leer desde config/club en Firestore)');
+    });
+  });
