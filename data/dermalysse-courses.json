@@ -1,0 +1,1114 @@
+[
+  {
+    "id": "course-uso-de-tecnologias-avanzadas-en-cosmiatria",
+    "name": "Uso de Tecnologías Avanzadas en Cosmiatría",
+    "desc": "Conoce tecnologías aplicadas a la cosmiatría, sus criterios de selección y su integración responsable en protocolos profesionales.",
+    "cat": "Cosmiatría",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2025-11-17",
+    "temario": "",
+    "img": "img/cursos/course-uso-de-tecnologias-avanzadas-en-cosmiatria.webp",
+    "lessons": [
+      {
+        "id": "course-uso-de-tecnologias-avanzadas-en-cosmiatria-s01",
+        "name": "Sesión 01",
+        "desc": "Contenido audiovisual de sesión 01 del curso Uso de Tecnologías Avanzadas en Cosmiatría.",
+        "dur": "1 h 51 min",
+        "durationSeconds": 6650.75,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1
+        ],
+        "videoId": "93705efd-9188-48ab-b41e-67ebcaf692a0",
+        "isPreview": true,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Uso de Tecnologías Avanzadas en Cosmiatría - Sesión 01.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-uso-de-tecnologias-avanzadas-en-cosmiatria-s02",
+        "name": "Sesión 02",
+        "desc": "Contenido audiovisual de sesión 02 del curso Uso de Tecnologías Avanzadas en Cosmiatría.",
+        "dur": "2 h 6 min",
+        "durationSeconds": 7539.167,
+        "order": 2,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          2
+        ],
+        "videoId": "8f0027f1-e45e-47f2-995a-1a503dc7cb66",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Uso de Tecnologías Avanzadas en Cosmiatría - Sesión 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 1,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "dd16f07a-1654-4c09-b98d-ba4dfc428a5b",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "La sesión 01 puede reproducirse como vista previa gratuita para usuarios registrados."
+  },
+  {
+    "id": "course-rejuvenecimiento-facial-eficaz-domina-el-electrolifting-con-plasma-pen",
+    "name": "Rejuvenecimiento Facial Eficaz - Domina el Electrolifting con Plasma Pen",
+    "desc": "Estudia la valoración, seguridad y aplicación profesional del electrolifting con Plasma Pen en protocolos de rejuvenecimiento facial.",
+    "cat": "Estética facial",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2025-11-24",
+    "temario": "",
+    "img": "img/cursos/course-rejuvenecimiento-facial-eficaz-domina-el-electrolifting-con-plasma-pen.webp",
+    "lessons": [
+      {
+        "id": "course-rejuvenecimiento-facial-eficaz-domina-el-electrolifting-con-plasma-pen-s01",
+        "name": "Sesión 01",
+        "desc": "Contenido audiovisual de sesión 01 del curso Rejuvenecimiento Facial Eficaz - Domina el Electrolifting con Plasma Pen.",
+        "dur": "1 h 14 min",
+        "durationSeconds": 4425.792,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1
+        ],
+        "videoId": "bfa74672-7e1d-4d02-bb50-9dc437d841f7",
+        "isPreview": true,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Rejuvenecimiento Facial Eficaz - Domina el Electrolifting con Plasma Pen - Sesión 01.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-rejuvenecimiento-facial-eficaz-domina-el-electrolifting-con-plasma-pen-s02",
+        "name": "Sesión 02",
+        "desc": "Contenido audiovisual de sesión 02 del curso Rejuvenecimiento Facial Eficaz - Domina el Electrolifting con Plasma Pen.",
+        "dur": "1 h 10 min",
+        "durationSeconds": 4185.625,
+        "order": 2,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          2
+        ],
+        "videoId": "868448b8-3eca-49a0-9d8b-af3c14b159ee",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Rejuvenecimiento Facial Eficaz - Domina el Electrolifting con Plasma Pen - Sesión 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-rejuvenecimiento-facial-eficaz-domina-el-electrolifting-con-plasma-pen-s03",
+        "name": "Sesión 03",
+        "desc": "Contenido audiovisual de sesión 03 del curso Rejuvenecimiento Facial Eficaz - Domina el Electrolifting con Plasma Pen.",
+        "dur": "1 h 55 min",
+        "durationSeconds": 6886.75,
+        "order": 3,
+        "assetPosition": 3,
+        "sessionNumbers": [
+          3
+        ],
+        "videoId": "8aeb0cdb-73e3-456a-85eb-bebca26c3af6",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Rejuvenecimiento Facial Eficaz - Domina el Electrolifting con Plasma Pen - Sesión 03.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-rejuvenecimiento-facial-eficaz-domina-el-electrolifting-con-plasma-pen-s04",
+        "name": "Sesión 04",
+        "desc": "Contenido audiovisual de sesión 04 del curso Rejuvenecimiento Facial Eficaz - Domina el Electrolifting con Plasma Pen.",
+        "dur": "49 min",
+        "durationSeconds": 2923.667,
+        "order": 4,
+        "assetPosition": 4,
+        "sessionNumbers": [
+          4
+        ],
+        "videoId": "216a81c4-62a6-4a08-bfa5-97ce48837b98",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Rejuvenecimiento Facial Eficaz - Domina el Electrolifting con Plasma Pen - Sesión 04.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 2,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "4cfc65fb-d1bc-43ce-bf4b-1c1ae34900ac",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "La sesión 01 puede reproducirse como vista previa gratuita para usuarios registrados."
+  },
+  {
+    "id": "course-tecnicas-avanzadas-en-rejuvenecimiento-facial-botox-y-rellenos-dermicos",
+    "name": "Técnicas Avanzadas en Rejuvenecimiento Facial - Botox y Rellenos Dérmicos",
+    "desc": "Profundiza en criterios de valoración y fundamentos de técnicas avanzadas de rejuvenecimiento facial con toxina botulínica y rellenos dérmicos.",
+    "cat": "Estética facial",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2025-11-24",
+    "temario": "",
+    "img": "img/cursos/course-tecnicas-avanzadas-en-rejuvenecimiento-facial-botox-y-rellenos-dermicos.webp",
+    "lessons": [
+      {
+        "id": "course-tecnicas-avanzadas-en-rejuvenecimiento-facial-botox-y-rellenos-dermicos-s01",
+        "name": "Sesión 01",
+        "desc": "Contenido audiovisual de sesión 01 del curso Técnicas Avanzadas en Rejuvenecimiento Facial - Botox y Rellenos Dérmicos.",
+        "dur": "1 h 10 min",
+        "durationSeconds": 4185.042,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1
+        ],
+        "videoId": "224422b4-9dc6-4f35-bba3-8ad82bdb8bff",
+        "isPreview": true,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Técnicas Avanzadas en Rejuvenecimiento Facial - Botox y Rellenos Dérmicos - Sesión 01.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-tecnicas-avanzadas-en-rejuvenecimiento-facial-botox-y-rellenos-dermicos-s02",
+        "name": "Sesión 02",
+        "desc": "Contenido audiovisual de sesión 02 del curso Técnicas Avanzadas en Rejuvenecimiento Facial - Botox y Rellenos Dérmicos.",
+        "dur": "2 h 8 min",
+        "durationSeconds": 7670.167,
+        "order": 2,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          2
+        ],
+        "videoId": "c2bf8765-9cab-4584-8b2e-97cfdd8ab276",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Técnicas Avanzadas en Rejuvenecimiento Facial - Botox y Rellenos Dérmicos - Sesión 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-tecnicas-avanzadas-en-rejuvenecimiento-facial-botox-y-rellenos-dermicos-s03",
+        "name": "Sesión 03",
+        "desc": "Contenido audiovisual de sesión 03 del curso Técnicas Avanzadas en Rejuvenecimiento Facial - Botox y Rellenos Dérmicos.",
+        "dur": "58 min",
+        "durationSeconds": 3474.5,
+        "order": 3,
+        "assetPosition": 3,
+        "sessionNumbers": [
+          3
+        ],
+        "videoId": "b3e737db-655d-4a56-bb08-b60660edcfbb",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Técnicas Avanzadas en Rejuvenecimiento Facial - Botox y Rellenos Dérmicos - Sesión 03.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-tecnicas-avanzadas-en-rejuvenecimiento-facial-botox-y-rellenos-dermicos-s04",
+        "name": "Sesión 04",
+        "desc": "Contenido audiovisual de sesión 04 del curso Técnicas Avanzadas en Rejuvenecimiento Facial - Botox y Rellenos Dérmicos.",
+        "dur": "1 h 3 min",
+        "durationSeconds": 3792.25,
+        "order": 4,
+        "assetPosition": 4,
+        "sessionNumbers": [
+          4
+        ],
+        "videoId": "46dc8080-e389-46da-9504-bf010f096969",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Técnicas Avanzadas en Rejuvenecimiento Facial - Botox y Rellenos Dérmicos - Sesión 04.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 3,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "40cedcce-3167-4cc3-bbeb-7e247f37c87c",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "La sesión 01 puede reproducirse como vista previa gratuita para usuarios registrados."
+  },
+  {
+    "id": "course-tratamientos-faciales-anti-envejecimiento",
+    "name": "Tratamientos Faciales Anti-envejecimiento",
+    "desc": "Diseña protocolos faciales anti-envejecimiento a partir de una valoración profesional y una selección consciente de técnicas y activos.",
+    "cat": "Estética facial",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2025-11-25",
+    "temario": "",
+    "img": "img/cursos/course-tratamientos-faciales-anti-envejecimiento.webp",
+    "lessons": [
+      {
+        "id": "course-tratamientos-faciales-anti-envejecimiento-s01",
+        "name": "Sesión 01",
+        "desc": "Contenido audiovisual de sesión 01 del curso Tratamientos Faciales Anti-envejecimiento.",
+        "dur": "1 h 59 min",
+        "durationSeconds": 7168.875,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1
+        ],
+        "videoId": "b1224b14-dafb-4c6f-9848-d07cd8f45450",
+        "isPreview": true,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Tratamientos Faciales Anti-envejecimiento - Sesión 01.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-tratamientos-faciales-anti-envejecimiento-s02",
+        "name": "Sesión 02",
+        "desc": "Contenido audiovisual de sesión 02 del curso Tratamientos Faciales Anti-envejecimiento.",
+        "dur": "1 h",
+        "durationSeconds": 3575.042,
+        "order": 2,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          2
+        ],
+        "videoId": "31594ed2-5ef4-47bc-89ea-d80203064638",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Tratamientos Faciales Anti-envejecimiento - Sesión 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-tratamientos-faciales-anti-envejecimiento-s03",
+        "name": "Sesión 03",
+        "desc": "Contenido audiovisual de sesión 03 del curso Tratamientos Faciales Anti-envejecimiento.",
+        "dur": "2 h 10 min",
+        "durationSeconds": 7800.792,
+        "order": 3,
+        "assetPosition": 3,
+        "sessionNumbers": [
+          3
+        ],
+        "videoId": "9df04def-eb0a-4fa8-b46d-13877d08e4bf",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Tratamientos Faciales Anti-envejecimiento - Sesión 03.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 4,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "8c9cdf6a-db86-4d02-960f-43df2d4fb368",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "La sesión 01 puede reproducirse como vista previa gratuita para usuarios registrados."
+  },
+  {
+    "id": "course-microdermoabrasion-y-dermaplaning-tecnicas-de-exfoliacion-avanzada",
+    "name": "Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada",
+    "desc": "Domina criterios, preparación y técnicas de exfoliación avanzada con microdermoabrasión y dermaplaning.",
+    "cat": "Estética facial",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2025-12-08",
+    "temario": "",
+    "img": "img/cursos/course-microdermoabrasion-y-dermaplaning-tecnicas-de-exfoliacion-avanzada.webp",
+    "lessons": [
+      {
+        "id": "course-microdermoabrasion-y-dermaplaning-tecnicas-de-exfoliacion-avanzada-s01",
+        "name": "Sesión 01",
+        "desc": "Contenido audiovisual de sesión 01 del curso Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada.",
+        "dur": "1 h 4 min",
+        "durationSeconds": 3821.0,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1
+        ],
+        "videoId": "48558932-0c31-4c14-b057-b151ad8f3dd8",
+        "isPreview": true,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada - Sesión 01.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-microdermoabrasion-y-dermaplaning-tecnicas-de-exfoliacion-avanzada-s02",
+        "name": "Sesión 02",
+        "desc": "Contenido audiovisual de sesión 02 del curso Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada.",
+        "dur": "1 h",
+        "durationSeconds": 3608.667,
+        "order": 2,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          2
+        ],
+        "videoId": "a0aa628d-724f-4470-947d-52dd88e41d30",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada - Sesión 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-microdermoabrasion-y-dermaplaning-tecnicas-de-exfoliacion-avanzada-s03",
+        "name": "Sesión 03",
+        "desc": "Contenido audiovisual de sesión 03 del curso Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada.",
+        "dur": "1 h",
+        "durationSeconds": 3622.542,
+        "order": 3,
+        "assetPosition": 3,
+        "sessionNumbers": [
+          3
+        ],
+        "videoId": "43ffed71-00da-4e44-9947-c559c51a9006",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada - Sesión 03.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-microdermoabrasion-y-dermaplaning-tecnicas-de-exfoliacion-avanzada-s04",
+        "name": "Sesión 04",
+        "desc": "Contenido audiovisual de sesión 04 del curso Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada.",
+        "dur": "55 min",
+        "durationSeconds": 3317.0,
+        "order": 4,
+        "assetPosition": 4,
+        "sessionNumbers": [
+          4
+        ],
+        "videoId": "41ca41ab-d702-47ae-9cc8-93ceaa8f4aaa",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada - Sesión 04.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-microdermoabrasion-y-dermaplaning-tecnicas-de-exfoliacion-avanzada-s05",
+        "name": "Sesión 05",
+        "desc": "Contenido audiovisual de sesión 05 del curso Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada.",
+        "dur": "55 min",
+        "durationSeconds": 3307.625,
+        "order": 5,
+        "assetPosition": 5,
+        "sessionNumbers": [
+          5
+        ],
+        "videoId": "936abc85-caf0-46cf-b772-2bbd0056af99",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Microdermoabrasión y Dermaplaning - Técnicas de Exfoliación Avanzada - Sesión 05.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 5,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "ae6b99ac-eebb-44a7-9d12-2c3e5ab1829b",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "La sesión 01 puede reproducirse como vista previa gratuita para usuarios registrados."
+  },
+  {
+    "id": "course-formulacion-de-cosmetica-natural",
+    "name": "Formulación de Cosmética Natural",
+    "desc": "Explora los fundamentos de la formulación cosmética natural, la selección de ingredientes y el desarrollo responsable de productos.",
+    "cat": "Cosmetología",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2025-12-18",
+    "temario": "",
+    "img": "img/cursos/course-formulacion-de-cosmetica-natural.webp",
+    "lessons": [
+      {
+        "id": "course-formulacion-de-cosmetica-natural-s01-02",
+        "name": "Sesiones 01 y 02",
+        "desc": "Contenido audiovisual de sesiones 01 y 02 del curso Formulación de Cosmética Natural.",
+        "dur": "2 h 29 min",
+        "durationSeconds": 8915.167,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1,
+          2
+        ],
+        "videoId": "b1d68d83-6482-4af3-b0e5-0ed31d60ddd5",
+        "isPreview": true,
+        "isCombinedSessionFile": true,
+        "previewUnavailable": false,
+        "assetName": "Formulación de Cosmética Natural - Sesiones 01 y 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-formulacion-de-cosmetica-natural-s03-04-05",
+        "name": "Sesiones 03, 04 y 05",
+        "desc": "Contenido audiovisual de sesiones 03, 04 y 05 del curso Formulación de Cosmética Natural.",
+        "dur": "2 h 31 min",
+        "durationSeconds": 9060.0,
+        "order": 3,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          3,
+          4,
+          5
+        ],
+        "videoId": "23cd1b4b-8542-49c9-83eb-6f6993403763",
+        "isPreview": false,
+        "isCombinedSessionFile": true,
+        "previewUnavailable": false,
+        "assetName": "Formulación de Cosmética Natural - Sesiones 03, 04 y 05.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 6,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "5b72e3de-c814-4c9b-a8f3-279553caefc2",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "El primer video integra las sesiones 01 y 02 y se ofrece completo como vista previa gratuita."
+  },
+  {
+    "id": "course-regulacion-cosmetica",
+    "name": "Regulación Cosmética",
+    "desc": "Conoce el marco regulatorio aplicado a productos cosméticos, su documentación y las responsabilidades de una práctica profesional.",
+    "cat": "Regulación",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2026-01-12",
+    "temario": "",
+    "img": "img/cursos/course-regulacion-cosmetica.webp",
+    "lessons": [
+      {
+        "id": "course-regulacion-cosmetica-s01-02",
+        "name": "Sesiones 01 y 02",
+        "desc": "Contenido audiovisual de sesiones 01 y 02 del curso Regulación Cosmética.",
+        "dur": "2 h 4 min",
+        "durationSeconds": 7443.375,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1,
+          2
+        ],
+        "videoId": "209b227f-f986-42a9-a59b-7f90e0e1357b",
+        "isPreview": true,
+        "isCombinedSessionFile": true,
+        "previewUnavailable": false,
+        "assetName": "Regulación Cosmética - Sesiones 01 y 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-regulacion-cosmetica-s03-04",
+        "name": "Sesiones 03 y 04",
+        "desc": "Contenido audiovisual de sesiones 03 y 04 del curso Regulación Cosmética.",
+        "dur": "2 h 4 min",
+        "durationSeconds": 7461.334,
+        "order": 3,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          3,
+          4
+        ],
+        "videoId": "5c12af55-00b2-43b0-977b-24bb2d6d2b35",
+        "isPreview": false,
+        "isCombinedSessionFile": true,
+        "previewUnavailable": false,
+        "assetName": "Regulación Cosmética - Sesiones 03 y 04.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-regulacion-cosmetica-s05",
+        "name": "Sesión 05",
+        "desc": "Contenido audiovisual de sesión 05 del curso Regulación Cosmética.",
+        "dur": "1 h 12 min",
+        "durationSeconds": 4317.959,
+        "order": 5,
+        "assetPosition": 3,
+        "sessionNumbers": [
+          5
+        ],
+        "videoId": "2a8de112-10d8-4945-91bf-4e750da20347",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Regulación Cosmética - Sesión 05.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 7,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "39120e40-06a8-467f-9e71-d23acbaf9efc",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "El primer video integra las sesiones 01 y 02 y se ofrece completo como vista previa gratuita."
+  },
+  {
+    "id": "course-estetica-corporal-tecnicas-de-contorno-y-remodelacion",
+    "name": "Estética Corporal - Técnicas de Contorno y Remodelación",
+    "desc": "Conoce técnicas profesionales de valoración, contorno y remodelación corporal para diseñar protocolos seguros y personalizados.",
+    "cat": "Estética corporal",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2026-02-02",
+    "temario": "",
+    "img": "img/cursos/course-estetica-corporal-tecnicas-de-contorno-y-remodelacion.webp",
+    "lessons": [
+      {
+        "id": "course-estetica-corporal-tecnicas-de-contorno-y-remodelacion-s01",
+        "name": "Sesión 01",
+        "desc": "Contenido audiovisual de sesión 01 del curso Estética Corporal - Técnicas de Contorno y Remodelación.",
+        "dur": "1 h 9 min",
+        "durationSeconds": 4110.084,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1
+        ],
+        "videoId": "6cd97b3d-2fbf-4544-a0b7-31c72c73eb6a",
+        "isPreview": true,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Estética Corporal - Técnicas de Contorno y Remodelación - Sesión 01.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-estetica-corporal-tecnicas-de-contorno-y-remodelacion-s02",
+        "name": "Sesión 02",
+        "desc": "Contenido audiovisual de sesión 02 del curso Estética Corporal - Técnicas de Contorno y Remodelación.",
+        "dur": "1 h 1 min",
+        "durationSeconds": 3632.042,
+        "order": 2,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          2
+        ],
+        "videoId": "405de1a1-a361-4a23-923c-fa3f8995984d",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Estética Corporal - Técnicas de Contorno y Remodelación - Sesión 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-estetica-corporal-tecnicas-de-contorno-y-remodelacion-s03",
+        "name": "Sesión 03",
+        "desc": "Contenido audiovisual de sesión 03 del curso Estética Corporal - Técnicas de Contorno y Remodelación.",
+        "dur": "1 h 5 min",
+        "durationSeconds": 3917.667,
+        "order": 3,
+        "assetPosition": 3,
+        "sessionNumbers": [
+          3
+        ],
+        "videoId": "55f42b6f-4c71-4f80-9a78-cbadda4f55f9",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Estética Corporal - Técnicas de Contorno y Remodelación - Sesión 03.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-estetica-corporal-tecnicas-de-contorno-y-remodelacion-s04",
+        "name": "Sesión 04",
+        "desc": "Contenido audiovisual de sesión 04 del curso Estética Corporal - Técnicas de Contorno y Remodelación.",
+        "dur": "59 min",
+        "durationSeconds": 3568.667,
+        "order": 4,
+        "assetPosition": 4,
+        "sessionNumbers": [
+          4
+        ],
+        "videoId": "a77baec6-6614-4f07-ba28-57b814c666fe",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Estética Corporal - Técnicas de Contorno y Remodelación - Sesión 04.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-estetica-corporal-tecnicas-de-contorno-y-remodelacion-s05",
+        "name": "Sesión 05",
+        "desc": "Contenido audiovisual de sesión 05 del curso Estética Corporal - Técnicas de Contorno y Remodelación.",
+        "dur": "1 h 11 min",
+        "durationSeconds": 4283.417,
+        "order": 5,
+        "assetPosition": 5,
+        "sessionNumbers": [
+          5
+        ],
+        "videoId": "4ba28936-624a-432c-8708-c9ecf473988c",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Estética Corporal - Técnicas de Contorno y Remodelación - Sesión 05.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 8,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "d896b5cb-3893-4360-8248-36532dd33675",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "La sesión 01 puede reproducirse como vista previa gratuita para usuarios registrados."
+  },
+  {
+    "id": "course-nutricion-clinica-para-enfermedades-cronicas",
+    "name": "Nutrición Clínica para Enfermedades Crónicas",
+    "desc": "Fortalece el abordaje nutricional de enfermedades crónicas mediante valoración, seguimiento y estrategias aplicables a la práctica.",
+    "cat": "Nutrición",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2026-03-09",
+    "temario": "",
+    "img": "img/cursos/course-nutricion-clinica-para-enfermedades-cronicas.webp",
+    "lessons": [
+      {
+        "id": "course-nutricion-clinica-para-enfermedades-cronicas-s01",
+        "name": "Sesión 01",
+        "desc": "Contenido audiovisual de sesión 01 del curso Nutrición Clínica para Enfermedades Crónicas.",
+        "dur": "53 min",
+        "durationSeconds": 3177.042,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1
+        ],
+        "videoId": "429d4726-4512-465a-accb-28e37ca2b235",
+        "isPreview": true,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición Clínica para Enfermedades Crónicas - Sesión 01.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-nutricion-clinica-para-enfermedades-cronicas-s02",
+        "name": "Sesión 02",
+        "desc": "Contenido audiovisual de sesión 02 del curso Nutrición Clínica para Enfermedades Crónicas.",
+        "dur": "1 h",
+        "durationSeconds": 3592.5,
+        "order": 2,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          2
+        ],
+        "videoId": "bef55fdb-90b7-435c-9e78-91d335ff9d8f",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición Clínica para Enfermedades Crónicas - Sesión 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-nutricion-clinica-para-enfermedades-cronicas-s03",
+        "name": "Sesión 03",
+        "desc": "Contenido audiovisual de sesión 03 del curso Nutrición Clínica para Enfermedades Crónicas.",
+        "dur": "56 min",
+        "durationSeconds": 3383.084,
+        "order": 3,
+        "assetPosition": 3,
+        "sessionNumbers": [
+          3
+        ],
+        "videoId": "ccd37109-67e2-4288-88e9-60f6876c4db3",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición Clínica para Enfermedades Crónicas - Sesión 03.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-nutricion-clinica-para-enfermedades-cronicas-s04",
+        "name": "Sesión 04",
+        "desc": "Contenido audiovisual de sesión 04 del curso Nutrición Clínica para Enfermedades Crónicas.",
+        "dur": "1 h 1 min",
+        "durationSeconds": 3661.5,
+        "order": 4,
+        "assetPosition": 4,
+        "sessionNumbers": [
+          4
+        ],
+        "videoId": "d636a465-8bb9-4f5e-86a3-fe8815dc0e1b",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición Clínica para Enfermedades Crónicas - Sesión 04.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-nutricion-clinica-para-enfermedades-cronicas-s05",
+        "name": "Sesión 05",
+        "desc": "Contenido audiovisual de sesión 05 del curso Nutrición Clínica para Enfermedades Crónicas.",
+        "dur": "58 min",
+        "durationSeconds": 3459.542,
+        "order": 5,
+        "assetPosition": 5,
+        "sessionNumbers": [
+          5
+        ],
+        "videoId": "95a4b27a-6652-46e0-b95c-2ea213cb64af",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición Clínica para Enfermedades Crónicas - Sesión 05.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 9,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "e5b11b77-281a-4ec1-a746-955849e5e9d2",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "La sesión 01 puede reproducirse como vista previa gratuita para usuarios registrados."
+  },
+  {
+    "id": "course-nutricion-y-entrenamiento-para-estetica-corporal",
+    "name": "Nutrición y Entrenamiento para Estética Corporal",
+    "desc": "Relaciona nutrición, entrenamiento y composición corporal para construir planes estéticos integrales y sostenibles.",
+    "cat": "Nutrición",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2026-03-16",
+    "temario": "",
+    "img": "img/cursos/course-nutricion-y-entrenamiento-para-estetica-corporal.webp",
+    "lessons": [
+      {
+        "id": "course-nutricion-y-entrenamiento-para-estetica-corporal-s01",
+        "name": "Sesión 01",
+        "desc": "Contenido audiovisual de sesión 01 del curso Nutrición y Entrenamiento para Estética Corporal.",
+        "dur": "1 h 4 min",
+        "durationSeconds": 3820.334,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1
+        ],
+        "videoId": "2efde757-eccb-49d0-abdd-d3cd881bb5d7",
+        "isPreview": true,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición y Entrenamiento para Estética Corporal - Sesión 01.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-nutricion-y-entrenamiento-para-estetica-corporal-s02",
+        "name": "Sesión 02",
+        "desc": "Contenido audiovisual de sesión 02 del curso Nutrición y Entrenamiento para Estética Corporal.",
+        "dur": "1 h 21 min",
+        "durationSeconds": 4836.959,
+        "order": 2,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          2
+        ],
+        "videoId": "6cc17984-d7c1-41f6-a964-717d4c0f30d2",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición y Entrenamiento para Estética Corporal - Sesión 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-nutricion-y-entrenamiento-para-estetica-corporal-s03",
+        "name": "Sesión 03",
+        "desc": "Contenido audiovisual de sesión 03 del curso Nutrición y Entrenamiento para Estética Corporal.",
+        "dur": "1 h",
+        "durationSeconds": 3574.459,
+        "order": 3,
+        "assetPosition": 3,
+        "sessionNumbers": [
+          3
+        ],
+        "videoId": "81aee008-850c-42a6-89e9-2f5e5ceb6949",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición y Entrenamiento para Estética Corporal - Sesión 03.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-nutricion-y-entrenamiento-para-estetica-corporal-s04",
+        "name": "Sesión 04",
+        "desc": "Contenido audiovisual de sesión 04 del curso Nutrición y Entrenamiento para Estética Corporal.",
+        "dur": "1 h 8 min",
+        "durationSeconds": 4104.625,
+        "order": 4,
+        "assetPosition": 4,
+        "sessionNumbers": [
+          4
+        ],
+        "videoId": "2c4d14aa-dcff-4b7b-807a-f0a284233cd2",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición y Entrenamiento para Estética Corporal - Sesión 04.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-nutricion-y-entrenamiento-para-estetica-corporal-s05",
+        "name": "Sesión 05",
+        "desc": "Contenido audiovisual de sesión 05 del curso Nutrición y Entrenamiento para Estética Corporal.",
+        "dur": "1 h 4 min",
+        "durationSeconds": 3818.667,
+        "order": 5,
+        "assetPosition": 5,
+        "sessionNumbers": [
+          5
+        ],
+        "videoId": "e4c67fd4-901f-40fc-af90-7c39145981a3",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición y Entrenamiento para Estética Corporal - Sesión 05.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 10,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "a24d53a5-cea5-4bb2-b69d-c31f230601cb",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "La sesión 01 puede reproducirse como vista previa gratuita para usuarios registrados."
+  },
+  {
+    "id": "course-nutricion-para-la-prevencion-del-sobrepeso-y-la-obesidad",
+    "name": "Nutrición para la Prevención del Sobrepeso y la Obesidad",
+    "desc": "Comprende factores de riesgo y estrategias nutricionales para la prevención del sobrepeso y la obesidad.",
+    "cat": "Nutrición",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2026-03-31",
+    "temario": "",
+    "img": "img/cursos/course-nutricion-para-la-prevencion-del-sobrepeso-y-la-obesidad.webp",
+    "lessons": [
+      {
+        "id": "course-nutricion-para-la-prevencion-del-sobrepeso-y-la-obesidad-s01",
+        "name": "Sesión 01",
+        "desc": "Contenido audiovisual de sesión 01 del curso Nutrición para la Prevención del Sobrepeso y la Obesidad.",
+        "dur": "1 h 53 min",
+        "durationSeconds": 6788.584,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1
+        ],
+        "videoId": "f76dbd85-6f48-4c0f-a884-3c26c6ebef86",
+        "isPreview": true,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición para la Prevención del Sobrepeso y la Obesidad - Sesión 01.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-nutricion-para-la-prevencion-del-sobrepeso-y-la-obesidad-s02",
+        "name": "Sesión 02",
+        "desc": "Contenido audiovisual de sesión 02 del curso Nutrición para la Prevención del Sobrepeso y la Obesidad.",
+        "dur": "1 h 54 min",
+        "durationSeconds": 6825.292,
+        "order": 2,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          2
+        ],
+        "videoId": "df0a4a1d-6aaf-4740-a35b-791e20211eb3",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición para la Prevención del Sobrepeso y la Obesidad - Sesión 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-nutricion-para-la-prevencion-del-sobrepeso-y-la-obesidad-s03",
+        "name": "Sesión 03",
+        "desc": "Contenido audiovisual de sesión 03 del curso Nutrición para la Prevención del Sobrepeso y la Obesidad.",
+        "dur": "1 h 9 min",
+        "durationSeconds": 4153.75,
+        "order": 3,
+        "assetPosition": 3,
+        "sessionNumbers": [
+          3
+        ],
+        "videoId": "2e8616b9-5e19-47e5-910b-d6b7f29fabc9",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Nutrición para la Prevención del Sobrepeso y la Obesidad - Sesión 03.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 11,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "3e791c52-3d5d-42e3-99fd-24381dacb5e9",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "La sesión 01 puede reproducirse como vista previa gratuita para usuarios registrados."
+  },
+  {
+    "id": "course-biohacking-para-la-salud-nutricion-y-metabolismo",
+    "name": "Biohacking para la Salud - Nutrición y Metabolismo",
+    "desc": "Integra nutrición, metabolismo y hábitos basados en evidencia para comprender y mejorar el bienestar desde un enfoque integral.",
+    "cat": "Nutrición",
+    "level": "Profesional",
+    "status": "published",
+    "instructor": "Equipo académico Dermalysse",
+    "date": "2026-04-13",
+    "temario": "",
+    "img": "img/cursos/course-biohacking-para-la-salud-nutricion-y-metabolismo.webp",
+    "lessons": [
+      {
+        "id": "course-biohacking-para-la-salud-nutricion-y-metabolismo-s01",
+        "name": "Sesión 01",
+        "desc": "Contenido audiovisual de sesión 01 del curso Biohacking para la Salud - Nutrición y Metabolismo.",
+        "dur": "1 h 15 min",
+        "durationSeconds": 4504.917,
+        "order": 1,
+        "assetPosition": 1,
+        "sessionNumbers": [
+          1
+        ],
+        "videoId": "0e19122c-2efa-47be-8d3f-e092b54d5efa",
+        "isPreview": true,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Biohacking para la Salud - Nutrición y Metabolismo - Sesión 01.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-biohacking-para-la-salud-nutricion-y-metabolismo-s02",
+        "name": "Sesión 02",
+        "desc": "Contenido audiovisual de sesión 02 del curso Biohacking para la Salud - Nutrición y Metabolismo.",
+        "dur": "1 h 4 min",
+        "durationSeconds": 3812.0,
+        "order": 2,
+        "assetPosition": 2,
+        "sessionNumbers": [
+          2
+        ],
+        "videoId": "642700fd-7fd4-47d4-8c11-a72b5b55cca5",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Biohacking para la Salud - Nutrición y Metabolismo - Sesión 02.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-biohacking-para-la-salud-nutricion-y-metabolismo-s03",
+        "name": "Sesión 03",
+        "desc": "Contenido audiovisual de sesión 03 del curso Biohacking para la Salud - Nutrición y Metabolismo.",
+        "dur": "1 h 11 min",
+        "durationSeconds": 4285.542,
+        "order": 3,
+        "assetPosition": 3,
+        "sessionNumbers": [
+          3
+        ],
+        "videoId": "e9cf0e2f-b309-4f88-ac63-78059258ceea",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Biohacking para la Salud - Nutrición y Metabolismo - Sesión 03.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      },
+      {
+        "id": "course-biohacking-para-la-salud-nutricion-y-metabolismo-s04",
+        "name": "Sesión 04",
+        "desc": "Contenido audiovisual de sesión 04 del curso Biohacking para la Salud - Nutrición y Metabolismo.",
+        "dur": "1 h 13 min",
+        "durationSeconds": 4366.792,
+        "order": 4,
+        "assetPosition": 4,
+        "sessionNumbers": [
+          4
+        ],
+        "videoId": "ecab3ea5-b7a8-435c-ab52-7ca4a4a93d00",
+        "isPreview": false,
+        "isCombinedSessionFile": false,
+        "previewUnavailable": false,
+        "assetName": "Biohacking para la Salud - Nutrición y Metabolismo - Sesión 04.mp4",
+        "provider": "bunny",
+        "encodeProgress": 100.0
+      }
+    ],
+    "releaseType": "immediate",
+    "order": 12,
+    "unlockDate": "",
+    "videoProvider": "bunny",
+    "bunnyCollectionId": "5efef855-1d5b-49f3-bfae-e282d2c70e79",
+    "previewPolicy": "first_video_asset",
+    "previewNote": "La sesión 01 puede reproducirse como vista previa gratuita para usuarios registrados."
+  }
+]
