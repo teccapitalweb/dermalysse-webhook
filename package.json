@@ -4,7 +4,8 @@
   "description": "Stripe webhook + checkout session server for Club Dermalysse",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "test": "node --test"
   },
   "dependencies": {
     "cors": "^2.8.5",
