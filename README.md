@@ -9,6 +9,8 @@ Servicio Express para webhooks y operaciones de Stripe, consulta de membresía y
 - Actualiza la membresía en Firestore.
 - Verifica Firebase ID tokens en todas las rutas sensibles.
 - Autoriza vistas previas gratuitas y clases premium de Bunny Stream.
+- Acredita el avance desde eventos reales del reproductor, sin botones manuales.
+- Emite certificados con folio consultable en el backend.
 
 ## Configuración
 
@@ -41,6 +43,8 @@ Configura en Stripe el endpoint desplegado terminado en `/webhook` y guarda su s
 El Club solicita `POST /bunny/playback` con un Firebase ID token y los identificadores internos de curso y clase. El servidor valida que el recurso pertenezca al catálogo y genera un embed firmado de corta duración.
 
 Una clase marcada `isPreview: true` está disponible para cualquier usuario registrado. Las demás requieren membresía vigente o cortesía vigente. El endpoint anterior `/api/bunny/embed-token` se conserva temporalmente para compatibilidad durante la actualización del frontend.
+
+El avance se reporta a `POST /courses/progress`. El servidor limita el tiempo acreditado al tiempo real transcurrido, completa la clase al 85% y exige la clase anterior antes de firmar la siguiente. `POST /courses/certificate` solo emite un folio cuando todas las clases están acreditadas; `GET /certificates/:code` permite comprobarlo públicamente sin exponer datos privados de la cuenta.
 
 El catálogo local de respaldo está en `data/dermalysse-courses.json` y no contiene credenciales ni URLs premium estables.
 
