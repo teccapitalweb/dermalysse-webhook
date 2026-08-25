@@ -146,6 +146,23 @@ async function leerPreciosConfig() {
   }
 }
 
+// ═══ LEER FICHAS DEL CONGRESO DESDE FIRESTORE ═══
+async function leerFichasCongreso() {
+  try {
+    const snap = await db.collection('config').doc('congreso').get();
+    const c = snap.exists ? snap.data() : {};
+    return {
+      ficha1Nombre: c.ficha1Nombre || 'Especial',
+      ficha1Precio: Number(c.ficha1Precio) > 0 ? Number(c.ficha1Precio) : 1000,
+      ficha2Nombre: c.ficha2Nombre || 'General',
+      ficha2Precio: Number(c.ficha2Precio) > 0 ? Number(c.ficha2Precio) : 500
+    };
+  } catch (e) {
+    console.error('Error leyendo fichas congreso:', e);
+    return { ficha1Nombre: 'Especial', ficha1Precio: 1000, ficha2Nombre: 'General', ficha2Precio: 500 };
+  }
+}
+
 const app = express();
 
 // ═══ CORS ═══
@@ -201,6 +218,42 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         const uid = session.metadata?.firebaseUid;
         const customerId = session.customer;
         const subscriptionId = session.subscription;
+
+        // ─── Ficha de congreso (pago único, sin cuenta/membresía) ───
+        if (session.metadata?.source === 'congreso') {
+          const md = session.metadata || {};
+          let extra = {};
+          try { extra = md.extra ? JSON.parse(md.extra) : {}; } catch (e) { extra = {}; }
+          const registro = {
+            nombre: md.nombre || session.customer_details?.name || '',
+            correo: session.customer_details?.email || md.correo || '',
+            telefono: md.telefono || session.customer_details?.phone || '',
+            ficha: md.fichaNombre || md.ficha || '',
+            monto: session.amount_total ? session.amount_total / 100 : null,
+            fechaCompra: new Date().toISOString(),
+            stripeSessionId: session.id,
+            stripeCustomerId: customerId || null,
+            extra
+          };
+          await db.collection('congresoRegistrations').add(registro);
+          console.log('🎟️  Registro de congreso guardado:', registro.correo, '-', registro.ficha);
+
+          if (registro.correo) {
+            sendEmail(registro.correo, '¡Tu ficha al congreso está confirmada!',
+              emailTemplate('¡Gracias por tu compra!',
+                '<p>Tu ficha <strong>' + registro.ficha + '</strong> ha sido confirmada.</p>' +
+                (registro.monto ? '<p><strong>Monto pagado:</strong> $' + registro.monto.toLocaleString('es-MX') + ' MXN</p>' : ''),
+                null, null)
+            );
+          }
+          setTimeout(function(){ sendEmail(ADMIN_EMAIL, 'Nuevo registro al congreso',
+            emailTemplate('Nueva ficha vendida',
+              '<p><strong>' + (registro.nombre || registro.correo) + '</strong> compró la ficha <strong>' + registro.ficha + '</strong>.</p>' +
+              '<p style="margin-top:1rem;"><strong>Correo:</strong> ' + registro.correo + '<br><strong>Teléfono:</strong> ' + (registro.telefono || '—') + '</p>',
+              'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
+          ); }, 3000);
+          break;
+        }
 
         if (uid && subscriptionId) {
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
@@ -622,6 +675,74 @@ app.post('/create-checkout-session', requireFirebaseUser, async (req, res) => {
   } catch (err) {
     console.error('Checkout session error:', err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══ CREAR CHECKOUT SESSION — FICHA DEL CONGRESO (pago único, sin cuenta) ═══
+app.post('/create-checkout-session-congreso', async (req, res) => {
+  try {
+    const { ficha, nombre, correo, telefono, extra, successUrl, cancelUrl } = req.body;
+
+    if (!['ficha1', 'ficha2'].includes(ficha)) {
+      return res.status(400).json({ error: 'Ficha inválida' });
+    }
+    if (!nombre || !correo || !telefono) {
+      return res.status(400).json({ error: 'Nombre, correo y teléfono son obligatorios' });
+    }
+
+    const fichas = await leerFichasCongreso();
+    const fichaNombre = ficha === 'ficha1' ? fichas.ficha1Nombre : fichas.ficha2Nombre;
+    const monto = ficha === 'ficha1' ? fichas.ficha1Precio : fichas.ficha2Precio;
+
+    if (monto < 10) {
+      return res.status(400).json({ error: 'El precio configurado ($' + monto + ' MXN) es menor al mínimo de Stripe ($10 MXN). Revisa la pestaña Congreso en el panel admin.' });
+    }
+
+    let extraJson = '';
+    try { extraJson = extra && typeof extra === 'object' ? JSON.stringify(extra).slice(0, 490) : ''; } catch (e) { extraJson = ''; }
+
+    const session = await stripe.checkout.sessions.create({
+      customer_email: correo,
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'mxn',
+          unit_amount: Math.round(monto * 100),
+          product_data: {
+            name: `Congreso DermaFutura · Ficha ${fichaNombre}`
+          }
+        },
+        quantity: 1
+      }],
+      mode: 'payment',
+      success_url: successUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=success',
+      cancel_url: cancelUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=canceled',
+      metadata: {
+        source: 'congreso',
+        ficha,
+        fichaNombre,
+        nombre: String(nombre).slice(0, 200),
+        correo: String(correo).slice(0, 200),
+        telefono: String(telefono).slice(0, 60),
+        extra: extraJson
+      }
+    });
+
+    res.json({ url: session.url, sessionId: session.id });
+  } catch (err) {
+    console.error('Checkout congreso error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══ PRECIOS PÚBLICOS DEL CONGRESO (para pintar el landing) ═══
+app.get('/congreso/precios', async (req, res) => {
+  try {
+    const fichas = await leerFichasCongreso();
+    res.set('Cache-Control', 'public, max-age=60');
+    res.json(fichas);
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudieron cargar las fichas' });
   }
 });
 
