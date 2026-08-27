@@ -236,6 +236,7 @@ const app = express();
 // ═══ CORS ═══
 const allowedOrigins = new Set([
   'https://club.dermalyssemx.com',
+  'https://congreso.dermalyssemx.com',
   'https://teccapitalweb.github.io',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
@@ -905,8 +906,8 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
             optional: true
           }
         ],
-        success_url: successUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=success',
-        cancel_url: cancelUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=canceled',
+        success_url: successUrl || 'https://congreso.dermalyssemx.com/?congreso=success#sede',
+        cancel_url: cancelUrl || 'https://congreso.dermalyssemx.com/?congreso=canceled#sede',
         metadata: {
           source: 'congreso',
           ficha,
