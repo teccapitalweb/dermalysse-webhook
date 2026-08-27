@@ -906,8 +906,8 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
             optional: true
           }
         ],
-        success_url: successUrl || 'https://congreso.dermalyssemx.com/?congreso=success#sede',
-        cancel_url: cancelUrl || 'https://congreso.dermalyssemx.com/?congreso=canceled#sede',
+        success_url: successUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=success',
+        cancel_url: cancelUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=canceled',
         metadata: {
           source: 'congreso',
           ficha,
