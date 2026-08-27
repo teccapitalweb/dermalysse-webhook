@@ -152,15 +152,83 @@ async function leerFichasCongreso() {
     const snap = await db.collection('config').doc('congreso').get();
     const c = snap.exists ? snap.data() : {};
     return {
-      ficha1Nombre: c.ficha1Nombre || 'Especial',
+      ficha1Nombre: c.ficha1Nombre || 'Preferente',
       ficha1Precio: Number(c.ficha1Precio) > 0 ? Number(c.ficha1Precio) : 1000,
       ficha2Nombre: c.ficha2Nombre || 'General',
       ficha2Precio: Number(c.ficha2Precio) > 0 ? Number(c.ficha2Precio) : 500
     };
   } catch (e) {
     console.error('Error leyendo fichas congreso:', e);
-    return { ficha1Nombre: 'Especial', ficha1Precio: 1000, ficha2Nombre: 'General', ficha2Precio: 500 };
+    return { ficha1Nombre: 'Preferente', ficha1Precio: 1000, ficha2Nombre: 'General', ficha2Precio: 500 };
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MAPA DE ASIENTOS DEL CONGRESO
+// Fila P  → 8 asientos de PONENTES (nacen 'reservado', nunca se venden)
+// Filas A–D → 40 asientos zona PREFERENTE (ficha1)
+// Filas E–J → 60 asientos zona GENERAL (ficha2)
+// Cambiar el layout aquí lo cambia en todo el sistema (el frontend y el
+// admin pintan lo que devuelve GET /congreso/asientos, no un mapa propio).
+// ═══════════════════════════════════════════════════════════════════
+const SEATMAP = [
+  { fila: 'P', asientos: 8,  zona: 'ponente' },
+  { fila: 'A', asientos: 10, zona: 'preferente' },
+  { fila: 'B', asientos: 10, zona: 'preferente' },
+  { fila: 'C', asientos: 10, zona: 'preferente' },
+  { fila: 'D', asientos: 10, zona: 'preferente' },
+  { fila: 'E', asientos: 10, zona: 'general' },
+  { fila: 'F', asientos: 10, zona: 'general' },
+  { fila: 'G', asientos: 10, zona: 'general' },
+  { fila: 'H', asientos: 10, zona: 'general' },
+  { fila: 'I', asientos: 10, zona: 'general' },
+  { fila: 'J', asientos: 10, zona: 'general' }
+];
+const ZONA_POR_FICHA = { ficha1: 'preferente', ficha2: 'general' };
+const HOLD_MINUTOS = 35; // > 30 min de expires_at de Stripe, con margen
+
+function todosLosAsientos() {
+  const out = [];
+  for (const f of SEATMAP) {
+    for (let n = 1; n <= f.asientos; n++) {
+      out.push({ id: f.fila + n, fila: f.fila, numero: n, zona: f.zona });
+    }
+  }
+  return out;
+}
+
+// Crea los docs de asientos la primera vez (idempotente: solo si no existen).
+let _asientosSeeded = false;
+async function asegurarAsientos() {
+  if (_asientosSeeded) return;
+  const col = db.collection('congresoAsientos');
+  const snap = await col.limit(1).get();
+  if (snap.empty) {
+    const batch = db.batch();
+    for (const a of todosLosAsientos()) {
+      batch.set(col.doc(a.id), {
+        fila: a.fila,
+        numero: a.numero,
+        zona: a.zona,
+        estado: a.zona === 'ponente' ? 'reservado' : 'libre',
+        holdUntil: null,
+        sessionId: null,
+        nombre: a.zona === 'ponente' ? 'Ponente' : null,
+        actualizadoEn: new Date().toISOString()
+      });
+    }
+    await batch.commit();
+    console.log('🪑 Mapa de asientos creado:', todosLosAsientos().length, 'asientos');
+  }
+  _asientosSeeded = true;
+}
+
+// Estado efectivo: un hold vencido cuenta como libre (sin escribir nada).
+function estadoEfectivo(data) {
+  if (data.estado === 'hold' && data.holdUntil && new Date(data.holdUntil) < new Date()) {
+    return 'libre';
+  }
+  return data.estado;
 }
 
 const app = express();
@@ -222,26 +290,60 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         // ─── Ficha de congreso (pago único, sin cuenta/membresía) ───
         if (session.metadata?.source === 'congreso') {
           const md = session.metadata || {};
+
+          /*
+            Datos de networking: llegan en session.custom_fields (a diferencia
+            de line_items, custom_fields SÍ viene en el payload del webhook).
+            Compatibilidad: sesiones creadas con el flujo viejo (modal) traían
+            md.extra como JSON en metadata; se conserva como fallback por si
+            alguna sesión vieja se completa después del deploy.
+          */
           let extra = {};
           try { extra = md.extra ? JSON.parse(md.extra) : {}; } catch (e) { extra = {}; }
+          const cf = {};
+          for (const f of (session.custom_fields || [])) {
+            cf[f.key] = (f.text && f.text.value) || '';
+          }
+          if (Object.keys(cf).length) {
+            extra = {
+              'Empresa': cf.empresa || '',
+              'LinkedIn/Web': cf.linkedin_web || '',
+              'Instagram': cf.instagram || ''
+            };
+          }
+
           const registro = {
-            nombre: md.nombre || session.customer_details?.name || '',
+            nombre: session.customer_details?.name || md.nombre || '',
             correo: session.customer_details?.email || md.correo || '',
-            telefono: md.telefono || session.customer_details?.phone || '',
+            telefono: session.customer_details?.phone || md.telefono || '',
             ficha: md.fichaNombre || md.ficha || '',
+            asiento: md.asiento || null,
             monto: session.amount_total ? session.amount_total / 100 : null,
             fechaCompra: new Date().toISOString(),
             stripeSessionId: session.id,
             stripeCustomerId: customerId || null,
             extra
           };
-          await db.collection('congresoRegistrations').add(registro);
-          console.log('🎟️  Registro de congreso guardado:', registro.correo, '-', registro.ficha);
+          const regRef = await db.collection('congresoRegistrations').add(registro);
+          console.log('🎟️  Registro de congreso guardado:', registro.correo, '-', registro.ficha, '- asiento', registro.asiento || '—');
+
+          // Marcar el asiento como VENDIDO (el hold pasa a definitivo).
+          if (registro.asiento) {
+            await db.collection('congresoAsientos').doc(registro.asiento).set({
+              estado: 'vendido',
+              holdUntil: null,
+              sessionId: session.id,
+              registroId: regRef.id,
+              nombre: registro.nombre || registro.correo || '',
+              actualizadoEn: new Date().toISOString()
+            }, { merge: true }).catch((e) => console.error('Error marcando asiento vendido:', e));
+          }
 
           if (registro.correo) {
             sendEmail(registro.correo, '¡Tu ficha al congreso está confirmada!',
               emailTemplate('¡Gracias por tu compra!',
                 '<p>Tu ficha <strong>' + registro.ficha + '</strong> ha sido confirmada.</p>' +
+                (registro.asiento ? '<p><strong>Tu asiento:</strong> ' + registro.asiento + '</p>' : '') +
                 (registro.monto ? '<p><strong>Monto pagado:</strong> $' + registro.monto.toLocaleString('es-MX') + ' MXN</p>' : ''),
                 null, null)
             );
@@ -322,6 +424,30 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               date: new Date().toISOString()
             });
           } catch(e) {}
+        }
+        break;
+      }
+
+      // ─── Checkout abandonado: liberar el asiento apartado del congreso ───
+      case 'checkout.session.expired': {
+        const session = event.data.object;
+        if (session.metadata?.source === 'congreso' && session.metadata?.asiento) {
+          const ref = db.collection('congresoAsientos').doc(session.metadata.asiento);
+          try {
+            await db.runTransaction(async (tx) => {
+              const doc = await tx.get(ref);
+              if (!doc.exists) return;
+              const a = doc.data();
+              // Solo liberar si el hold es de ESTA sesión (no pisar una venta
+              // posterior del mismo asiento por otra persona).
+              if (a.estado === 'hold' && a.sessionId === session.id) {
+                tx.update(ref, { estado: 'libre', holdUntil: null, sessionId: null, actualizadoEn: new Date().toISOString() });
+              }
+            });
+            console.log('🪑 Asiento liberado por sesión expirada:', session.metadata.asiento);
+          } catch (e) {
+            console.error('Error liberando asiento:', e);
+          }
         }
         break;
       }
@@ -681,13 +807,27 @@ app.post('/create-checkout-session', requireFirebaseUser, async (req, res) => {
 // ═══ CREAR CHECKOUT SESSION — FICHA DEL CONGRESO (pago único, sin cuenta) ═══
 app.post('/create-checkout-session-congreso', async (req, res) => {
   try {
-    const { ficha, nombre, correo, telefono, extra, successUrl, cancelUrl } = req.body;
+    /*
+      FLUJO DIRECTO A STRIPE con selección de asiento tipo cine:
+      1. El frontend manda { ficha, asiento } (el asiento elegido en el mapa).
+      2. Se valida que el asiento exista, sea de la zona de esa ficha
+         (ficha1=preferente filas A–D, ficha2=general filas E–J) y esté libre.
+      3. TRANSACCIÓN de Firestore: se aparta con 'hold' 35 min — dos personas
+         no pueden apartar el mismo asiento aunque paguen al mismo tiempo.
+      4. La sesión de Stripe expira a los 30 min (expires_at): si no paga,
+         checkout.session.expired libera el asiento; el hold vence solo como
+         red de seguridad extra.
+      Los datos personales se piden DENTRO de Stripe: nombre y correo nativos,
+      teléfono con phone_number_collection, networking en custom_fields (máx 3).
+      El registro se crea en el webhook checkout.session.completed.
+    */
+    const { ficha, asiento, successUrl, cancelUrl } = req.body;
 
     if (!['ficha1', 'ficha2'].includes(ficha)) {
       return res.status(400).json({ error: 'Ficha inválida' });
     }
-    if (!nombre || !correo || !telefono) {
-      return res.status(400).json({ error: 'Nombre, correo y teléfono son obligatorios' });
+    if (!asiento || typeof asiento !== 'string') {
+      return res.status(400).json({ error: 'Elige un asiento para continuar' });
     }
 
     const fichas = await leerFichasCongreso();
@@ -698,35 +838,90 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
       return res.status(400).json({ error: 'El precio configurado ($' + monto + ' MXN) es menor al mínimo de Stripe ($10 MXN). Revisa la pestaña Congreso en el panel admin.' });
     }
 
-    let extraJson = '';
-    try { extraJson = extra && typeof extra === 'object' ? JSON.stringify(extra).slice(0, 490) : ''; } catch (e) { extraJson = ''; }
+    await asegurarAsientos();
+    const zonaEsperada = ZONA_POR_FICHA[ficha];
+    const asientoRef = db.collection('congresoAsientos').doc(asiento.toUpperCase());
 
-    const session = await stripe.checkout.sessions.create({
-      customer_email: correo,
-      payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'mxn',
-          unit_amount: Math.round(monto * 100),
-          product_data: {
-            name: `Congreso DermaFutura · Ficha ${fichaNombre}`
+    // Apartar el asiento ANTES de crear la sesión de Stripe.
+    try {
+      await db.runTransaction(async (tx) => {
+        const doc = await tx.get(asientoRef);
+        if (!doc.exists) throw new Error('SEAT_NOT_FOUND');
+        const data = doc.data();
+        if (data.zona !== zonaEsperada) throw new Error('SEAT_WRONG_ZONE');
+        if (estadoEfectivo(data) !== 'libre') throw new Error('SEAT_TAKEN');
+        tx.update(asientoRef, {
+          estado: 'hold',
+          holdUntil: new Date(Date.now() + HOLD_MINUTOS * 60000).toISOString(),
+          sessionId: null,
+          actualizadoEn: new Date().toISOString()
+        });
+      });
+    } catch (e) {
+      if (e.message === 'SEAT_NOT_FOUND') return res.status(400).json({ error: 'Ese asiento no existe' });
+      if (e.message === 'SEAT_WRONG_ZONE') return res.status(400).json({ error: 'Ese asiento no corresponde a la ficha ' + fichaNombre });
+      if (e.message === 'SEAT_TAKEN') return res.status(409).json({ error: 'Ese asiento acaba de ocuparse, elige otro' });
+      throw e;
+    }
+
+    let session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'mxn',
+            unit_amount: Math.round(monto * 100),
+            product_data: {
+              name: `Congreso DermaFutura · Ficha ${fichaNombre} · Asiento ${asiento.toUpperCase()}`
+            }
+          },
+          quantity: 1
+        }],
+        mode: 'payment',
+        // 30 min es el mínimo que permite Stripe; si no paga, el asiento se libera.
+        expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+        // Teléfono lo pide Stripe de forma nativa:
+        phone_number_collection: { enabled: true },
+        // Datos de networking (3 campos = máximo permitido por Stripe).
+        locale: 'es-419',
+        custom_fields: [
+          {
+            key: 'empresa',
+            label: { type: 'custom', custom: 'Empresa o lugar donde trabajas' },
+            type: 'text',
+            optional: false
+          },
+          {
+            key: 'linkedin_web',
+            label: { type: 'custom', custom: 'LinkedIn o sitio web (opcional)' },
+            type: 'text',
+            optional: true
+          },
+          {
+            key: 'instagram',
+            label: { type: 'custom', custom: 'Instagram (opcional)' },
+            type: 'text',
+            optional: true
           }
-        },
-        quantity: 1
-      }],
-      mode: 'payment',
-      success_url: successUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=success',
-      cancel_url: cancelUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=canceled',
-      metadata: {
-        source: 'congreso',
-        ficha,
-        fichaNombre,
-        nombre: String(nombre).slice(0, 200),
-        correo: String(correo).slice(0, 200),
-        telefono: String(telefono).slice(0, 60),
-        extra: extraJson
-      }
-    });
+        ],
+        success_url: successUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=success',
+        cancel_url: cancelUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=canceled',
+        metadata: {
+          source: 'congreso',
+          ficha,
+          fichaNombre,
+          asiento: asiento.toUpperCase()
+        }
+      });
+    } catch (e) {
+      // Si Stripe falla, no dejar el asiento colgado en hold.
+      await asientoRef.update({ estado: 'libre', holdUntil: null, sessionId: null, actualizadoEn: new Date().toISOString() }).catch(() => {});
+      throw e;
+    }
+
+    // Amarrar el hold a esta sesión para poder liberarlo si expira.
+    await asientoRef.update({ sessionId: session.id }).catch(() => {});
 
     res.json({ url: session.url, sessionId: session.id });
   } catch (err) {
@@ -743,6 +938,35 @@ app.get('/congreso/precios', async (req, res) => {
     res.json(fichas);
   } catch (err) {
     res.status(500).json({ error: 'No se pudieron cargar las fichas' });
+  }
+});
+
+// ═══ MAPA DE ASIENTOS PÚBLICO (estado en vivo, para el selector tipo cine) ═══
+// El frontend solo necesita saber si cada asiento está disponible u ocupado;
+// nombres y sesiones NO se exponen aquí (eso vive en el panel admin).
+app.get('/congreso/asientos', async (req, res) => {
+  try {
+    await asegurarAsientos();
+    const snap = await db.collection('congresoAsientos').get();
+    const asientos = snap.docs.map((d) => {
+      const a = d.data();
+      const estado = estadoEfectivo(a);
+      return {
+        id: d.id,
+        fila: a.fila,
+        numero: a.numero,
+        zona: a.zona,
+        // Público: 'libre' | 'ocupado' | 'reservado' (ponentes/bloqueados)
+        estado: estado === 'libre' ? 'libre'
+          : (estado === 'vendido' || estado === 'hold') ? 'ocupado'
+          : 'reservado'
+      };
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ layout: SEATMAP, asientos });
+  } catch (err) {
+    console.error('GET asientos error:', err);
+    res.status(500).json({ error: 'No se pudo cargar el mapa de asientos' });
   }
 });
 
