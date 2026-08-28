@@ -375,6 +375,12 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           // El ID de sesión vuelve idempotente el procesamiento: si Stripe
           // reintenta el webhook, no duplica ni el registro ni la confirmación.
           const regRef = db.collection('congresoRegistrations').doc(session.id);
+          const eliminadoRef = db.collection('congresoDeletedRegistrations').doc(session.id);
+          const eliminadoSnap = await eliminadoRef.get();
+          if (eliminadoSnap.exists) {
+            console.log('⏭️  Registro eliminado definitivamente; webhook ignorado:', session.id);
+            break;
+          }
           const regAnterior = await regRef.get();
           const datosAnteriores = regAnterior.exists ? regAnterior.data() : {};
           if (regAnterior.exists) {
@@ -1310,6 +1316,42 @@ app.delete('/congreso/admin/registros/:id', requireFirebaseUser, requireFirebase
     if (err.message === 'REG_NOT_FOUND') return res.status(404).json({ error: 'El registro ya no existe' });
     console.error('DELETE registro congreso admin error:', err);
     res.status(500).json({ error: 'No se pudo cancelar el registro' });
+  }
+});
+
+// Eliminación permanente disponible únicamente después de cancelar. Esto evita
+// borrar por accidente una venta que todavía ocupa un asiento o una tarjeta QR.
+app.delete('/congreso/admin/registros/:id/permanente', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const registroId = req.params.id;
+    const registroRef = db.collection('congresoRegistrations').doc(registroId);
+    const registroSnap = await registroRef.get();
+    if (!registroSnap.exists) return res.status(404).json({ error: 'El registro ya no existe' });
+
+    const registro = registroSnap.data();
+    if (registro.estadoRegistro !== 'cancelado') {
+      return res.status(409).json({ error: 'Primero cancela el registro para liberar su asiento y tarjeta QR' });
+    }
+
+    const [asientosVinculados, tarjetasVinculadas] = await Promise.all([
+      db.collection('congresoAsientos').where('registroId', '==', registroId).limit(1).get(),
+      db.collection('congresoQrCards').where('asignadoRegistroId', '==', registroId).limit(1).get()
+    ]);
+    if (!asientosVinculados.empty || !tarjetasVinculadas.empty) {
+      return res.status(409).json({ error: 'El perfil aún conserva una asignación. Cancélalo nuevamente antes de eliminarlo' });
+    }
+
+    const batch = db.batch();
+    batch.set(db.collection('congresoDeletedRegistrations').doc(registroId), {
+      eliminadoEn: new Date().toISOString(),
+      eliminadoPor: req.firebaseUser.email || req.firebaseUser.uid
+    });
+    batch.delete(registroRef);
+    await batch.commit();
+    res.json({ ok: true, eliminado: registroId });
+  } catch (err) {
+    console.error('DELETE permanente registro congreso admin error:', err);
+    res.status(500).json({ error: 'No se pudo eliminar definitivamente el perfil' });
   }
 });
 

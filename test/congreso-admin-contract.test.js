@@ -21,9 +21,23 @@ test('protege todas las rutas de taquilla con usuario y administrador Firebase',
     "app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin",
     "app.put('/congreso/admin/registros/:id', requireFirebaseUser, requireFirebaseAdmin",
     "app.delete('/congreso/admin/registros/:id', requireFirebaseUser, requireFirebaseAdmin",
+    "app.delete('/congreso/admin/registros/:id/permanente', requireFirebaseUser, requireFirebaseAdmin",
     "app.patch('/congreso/admin/asientos/:id', requireFirebaseUser, requireFirebaseAdmin"
   ];
   for (const contract of contracts) assert.ok(source.includes(contract), `ruta sin protección: ${contract}`);
+});
+
+test('la eliminación permanente exige cancelación y ausencia de asignaciones', () => {
+  const start = source.indexOf("app.delete('/congreso/admin/registros/:id/permanente'");
+  const end = source.indexOf("app.patch('/congreso/admin/asientos/:id'", start);
+  assert.ok(start >= 0 && end > start);
+  const route = source.slice(start, end);
+  assert.match(route, /estadoRegistro !== 'cancelado'/);
+  assert.match(route, /congresoAsientos/);
+  assert.match(route, /congresoQrCards/);
+  assert.match(route, /congresoDeletedRegistrations/);
+  assert.match(route, /batch\.delete\(registroRef\)/);
+  assert.match(source, /Registro eliminado definitivamente; webhook ignorado/);
 });
 
 test('las altas y cambios de asiento se ejecutan dentro de transacciones', () => {
