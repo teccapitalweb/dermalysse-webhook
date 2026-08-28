@@ -31,17 +31,14 @@ function getBunnyTokenKey() {
   ].map(value => String(value || '').trim()).find(value => value && !/^PEGA_AQUI/i.test(value)) || '';
 }
 
-// ═══ EMAIL (EmailJS API — Club Dermalysse) ═══
+// ═══ EMAIL (Resend API — Dermalysse / BIO SKIN Congress) ═══
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
-const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID || '';
-const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID || '';
-const EMAILJS_PUBLIC_KEY = process.env.EMAILJS_PUBLIC_KEY || '';
-const EMAILJS_PRIVATE_KEY = process.env.EMAILJS_PRIVATE_KEY || '';
-const EMAIL_NOTIFICATIONS_CONFIGURED = Boolean(
-  EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY && EMAILJS_PRIVATE_KEY
-);
+const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim();
+const RESEND_FROM_EMAIL = String(process.env.RESEND_FROM_EMAIL || '').trim();
+const RESEND_REPLY_TO = String(process.env.RESEND_REPLY_TO || ADMIN_EMAIL || '').trim();
+const EMAIL_NOTIFICATIONS_CONFIGURED = Boolean(RESEND_API_KEY && RESEND_FROM_EMAIL);
 
-async function sendEmail(to, subject, html) {
+async function sendEmail(to, subject, html, options = {}) {
   if (!to) return { sent: false, reason: 'sin_correo' };
   if (!EMAIL_NOTIFICATIONS_CONFIGURED) {
     console.warn('Email omitido: integración no configurada en el entorno');
@@ -50,25 +47,30 @@ async function sendEmail(to, subject, html) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    const headers = {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    };
+    if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
+
+    const payload = {
+      from: RESEND_FROM_EMAIL,
+      to: [to],
+      subject,
+      html
+    };
+    if (RESEND_REPLY_TO) payload.reply_to = RESEND_REPLY_TO;
+
+    const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       signal: controller.signal,
-      body: JSON.stringify({
-        service_id: EMAILJS_SERVICE_ID,
-        template_id: EMAILJS_TEMPLATE_ID,
-        user_id: EMAILJS_PUBLIC_KEY,
-        accessToken: EMAILJS_PRIVATE_KEY,
-        template_params: {
-          to_email: to,
-          subject: subject,
-          message: html
-        }
-      })
+      body: JSON.stringify(payload)
     });
     if (res.ok) {
-      console.log('📧 Email enviado a:', to);
-      return { sent: true, reason: 'enviada' };
+      const data = await res.json().catch(() => ({}));
+      console.log('📧 Email enviado a:', to, data.id || '');
+      return { sent: true, reason: 'enviada', providerId: data.id || null };
     } else {
       const text = await res.text();
       console.error('Email error:', text);
@@ -80,6 +82,26 @@ async function sendEmail(to, subject, html) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function congresoEmailTemplate(title, body) {
+  return `
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;background:#f5fbfa;border:1px solid #d7eeea;">
+    <div style="background:#062d2b;padding:30px 36px;text-align:center;border-bottom:4px solid #21d4bd;">
+      <p style="color:#69ead8;letter-spacing:3px;font-size:11px;font-weight:700;margin:0 0 8px;">BIO SKIN</p>
+      <h1 style="color:#ffffff;margin:0;font-size:25px;">Congress 2026</h1>
+    </div>
+    <div style="padding:34px 38px;">
+      <h2 style="color:#062d2b;margin:0 0 18px;font-size:24px;">${title}</h2>
+      <div style="color:#365653;font-size:15px;line-height:1.75;">${body}</div>
+      <div style="text-align:center;margin-top:30px;">
+        <a href="https://congreso.dermalyssemx.com/#pases" style="background:#087f78;color:#ffffff;padding:13px 25px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver información del congreso</a>
+      </div>
+    </div>
+    <div style="padding:18px 32px;text-align:center;background:#e9f7f4;color:#61817d;font-size:12px;">
+      Dermalysse · BIO SKIN Congress 2026
+    </div>
+  </div>`;
 }
 
 function emailTemplate(title, body, buttonText, buttonUrl) {
@@ -362,11 +384,11 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
           if (registro.correo && !datosAnteriores.notificacionEnviadaEn) {
             const notificacion = await sendEmail(registro.correo, '¡Tu ficha al congreso está confirmada!',
-              emailTemplate('¡Gracias por tu compra!',
+              congresoEmailTemplate('¡Gracias por tu compra!',
                 '<p>Tu ficha <strong>' + registro.ficha + '</strong> ha sido confirmada.</p>' +
                 (registro.asiento ? '<p><strong>Tu asiento:</strong> ' + registro.asiento + '</p>' : '') +
-                (registro.monto ? '<p><strong>Monto pagado:</strong> $' + registro.monto.toLocaleString('es-MX') + ' MXN</p>' : ''),
-                null, null)
+                (registro.monto ? '<p><strong>Monto pagado:</strong> $' + registro.monto.toLocaleString('es-MX') + ' MXN</p>' : '')),
+              { idempotencyKey: 'congreso-comprador-' + session.id }
             );
             await regRef.set({
               notificacionCompra: notificacion.reason,
@@ -375,12 +397,16 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           } else if (!registro.correo) {
             await regRef.set({ notificacionCompra: 'sin_correo', notificacionEnviadaEn: null }, { merge: true });
           }
-          setTimeout(function(){ sendEmail(ADMIN_EMAIL, 'Nuevo registro al congreso',
-            emailTemplate('Nueva ficha vendida',
-              '<p><strong>' + (registro.nombre || registro.correo) + '</strong> compró la ficha <strong>' + registro.ficha + '</strong>.</p>' +
-              '<p style="margin-top:1rem;"><strong>Correo:</strong> ' + registro.correo + '<br><strong>Teléfono:</strong> ' + (registro.telefono || '—') + '</p>',
-              'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse/')
-          ); }, 3000);
+          setTimeout(function(){
+            sendEmail(
+              ADMIN_EMAIL,
+              'Nuevo registro al congreso',
+              congresoEmailTemplate('Nueva ficha vendida',
+                '<p><strong>' + (registro.nombre || registro.correo) + '</strong> compró la ficha <strong>' + registro.ficha + '</strong>.</p>' +
+                '<p style="margin-top:1rem;"><strong>Correo:</strong> ' + registro.correo + '<br><strong>Teléfono:</strong> ' + (registro.telefono || '—') + '</p>'),
+              { idempotencyKey: 'congreso-admin-' + session.id }
+            );
+          }, 3000);
           break;
         }
 
@@ -1447,6 +1473,7 @@ app.get('/', (req, res) => {
     status: 'ok',
     service: 'Dermalysse Webhook Server (con precios dinámicos)',
     firebaseProjectId: serviceAccount.project_id || null,
+    emailProvider: 'resend',
     emailNotifications: EMAIL_NOTIFICATIONS_CONFIGURED ? 'configured' : 'missing-config',
     bunnyStream: BUNNY_STREAM_LIBRARY_ID && BUNNY_STREAM_TOKEN_KEY ? 'configured' : 'missing-config',
     bunnyLibraryId: BUNNY_STREAM_LIBRARY_ID || null

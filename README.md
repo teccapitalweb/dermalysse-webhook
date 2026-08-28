@@ -25,7 +25,8 @@ Variables principales:
 - `BUNNY_STREAM_TOKEN_KEY`, `BUNNY_STREAM_TOKEN_AUTH_KEY` o la clave compatible configurada para la biblioteca
 - `BUNNY_STREAM_TOKEN_TTL_SECONDS`
 
-Las variables de EmailJS son opcionales. Si no existen, las notificaciones por correo se omiten sin afectar pagos ni reproducción.
+Las variables de Resend son `RESEND_API_KEY`, `RESEND_FROM_EMAIL` y, opcionalmente,
+`RESEND_REPLY_TO`. Si no existen, las notificaciones por correo se omiten sin afectar pagos ni reproducción.
 
 ## Ejecución local
 
