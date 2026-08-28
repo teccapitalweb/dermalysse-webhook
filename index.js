@@ -6,6 +6,7 @@ const admin = require('firebase-admin');
 const bundledCourseCatalog = require('./data/dermalysse-courses.json');
 const { hasCurrentMembership, membershipAccess } = require('./access-policy');
 const { advancePlaybackState, courseReleaseAccess, isLessonSequenceUnlocked } = require('./course-policy');
+const { cancelarReservaCongreso } = require('./congreso-reservation');
 
 // ═══ FIREBASE ADMIN ═══
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
@@ -931,6 +932,23 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
   }
 });
 
+// ═══ CANCELAR CHECKOUT DEL CONGRESO Y LIBERAR SU ASIENTO ═══
+// El sessionId es un identificador no predecible. Aun así, el backend valida
+// con Stripe que sea una sesión del congreso, que no esté pagada y la expira
+// antes de liberar el hold correspondiente.
+app.post('/congreso/cancelar-reserva', async (req, res) => {
+  try {
+    const resultado = await cancelarReservaCongreso({ stripe, db, sessionId: req.body?.sessionId });
+    res.json(resultado);
+  } catch (err) {
+    if (err.message === 'INVALID_CHECKOUT_SESSION' || err.message === 'NOT_CONGRESS_SESSION') {
+      return res.status(400).json({ error: 'La reservación no es válida' });
+    }
+    console.error('Cancelar reserva congreso error:', err);
+    res.status(500).json({ error: 'No se pudo liberar la reservación' });
+  }
+});
+
 // ═══ PRECIOS PÚBLICOS DEL CONGRESO (para pintar el landing) ═══
 app.get('/congreso/precios', async (req, res) => {
   try {
@@ -943,7 +961,7 @@ app.get('/congreso/precios', async (req, res) => {
 });
 
 // ═══ MAPA DE ASIENTOS PÚBLICO (estado en vivo, para el selector tipo cine) ═══
-// El frontend solo necesita saber si cada asiento está disponible u ocupado;
+// El frontend distingue una venta definitiva de un checkout aún en proceso;
 // nombres y sesiones NO se exponen aquí (eso vive en el panel admin).
 app.get('/congreso/asientos', async (req, res) => {
   try {
@@ -957,9 +975,9 @@ app.get('/congreso/asientos', async (req, res) => {
         fila: a.fila,
         numero: a.numero,
         zona: a.zona,
-        // Público: 'libre' | 'ocupado' | 'reservado' (ponentes/bloqueados)
+        // Público: hold = reservado temporal; vendido = ocupado definitivo.
         estado: estado === 'libre' ? 'libre'
-          : (estado === 'vendido' || estado === 'hold') ? 'ocupado'
+          : estado === 'vendido' ? 'ocupado'
           : 'reservado'
       };
     });
