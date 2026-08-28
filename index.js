@@ -37,16 +37,23 @@ const EMAILJS_SERVICE_ID = process.env.EMAILJS_SERVICE_ID || '';
 const EMAILJS_TEMPLATE_ID = process.env.EMAILJS_TEMPLATE_ID || '';
 const EMAILJS_PUBLIC_KEY = process.env.EMAILJS_PUBLIC_KEY || '';
 const EMAILJS_PRIVATE_KEY = process.env.EMAILJS_PRIVATE_KEY || '';
+const EMAIL_NOTIFICATIONS_CONFIGURED = Boolean(
+  EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && EMAILJS_PUBLIC_KEY && EMAILJS_PRIVATE_KEY
+);
 
 async function sendEmail(to, subject, html) {
-  if (!to || !EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PUBLIC_KEY || !EMAILJS_PRIVATE_KEY) {
+  if (!to) return { sent: false, reason: 'sin_correo' };
+  if (!EMAIL_NOTIFICATIONS_CONFIGURED) {
     console.warn('Email omitido: integración no configurada en el entorno');
-    return;
+    return { sent: false, reason: 'no_configurada' };
   }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
   try {
     const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         service_id: EMAILJS_SERVICE_ID,
         template_id: EMAILJS_TEMPLATE_ID,
@@ -61,11 +68,18 @@ async function sendEmail(to, subject, html) {
     });
     if (res.ok) {
       console.log('📧 Email enviado a:', to);
+      return { sent: true, reason: 'enviada' };
     } else {
       const text = await res.text();
       console.error('Email error:', text);
+      return { sent: false, reason: 'error_proveedor' };
     }
-  } catch(e) { console.error('Email error:', e.message); }
+  } catch(e) {
+    console.error('Email error:', e.message);
+    return { sent: false, reason: 'error_red' };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function emailTemplate(title, body, buttonText, buttonUrl) {
@@ -326,7 +340,12 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             stripeCustomerId: customerId || null,
             extra
           };
-          const regRef = await db.collection('congresoRegistrations').add(registro);
+          // El ID de sesión vuelve idempotente el procesamiento: si Stripe
+          // reintenta el webhook, no duplica ni el registro ni la confirmación.
+          const regRef = db.collection('congresoRegistrations').doc(session.id);
+          const regAnterior = await regRef.get();
+          const datosAnteriores = regAnterior.exists ? regAnterior.data() : {};
+          await regRef.set(registro, { merge: true });
           console.log('🎟️  Registro de congreso guardado:', registro.correo, '-', registro.ficha, '- asiento', registro.asiento || '—');
 
           // Marcar el asiento como VENDIDO (el hold pasa a definitivo).
@@ -341,20 +360,26 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             }, { merge: true }).catch((e) => console.error('Error marcando asiento vendido:', e));
           }
 
-          if (registro.correo) {
-            sendEmail(registro.correo, '¡Tu ficha al congreso está confirmada!',
+          if (registro.correo && !datosAnteriores.notificacionEnviadaEn) {
+            const notificacion = await sendEmail(registro.correo, '¡Tu ficha al congreso está confirmada!',
               emailTemplate('¡Gracias por tu compra!',
                 '<p>Tu ficha <strong>' + registro.ficha + '</strong> ha sido confirmada.</p>' +
                 (registro.asiento ? '<p><strong>Tu asiento:</strong> ' + registro.asiento + '</p>' : '') +
                 (registro.monto ? '<p><strong>Monto pagado:</strong> $' + registro.monto.toLocaleString('es-MX') + ' MXN</p>' : ''),
                 null, null)
             );
+            await regRef.set({
+              notificacionCompra: notificacion.reason,
+              notificacionEnviadaEn: notificacion.sent ? new Date().toISOString() : null
+            }, { merge: true });
+          } else if (!registro.correo) {
+            await regRef.set({ notificacionCompra: 'sin_correo', notificacionEnviadaEn: null }, { merge: true });
           }
           setTimeout(function(){ sendEmail(ADMIN_EMAIL, 'Nuevo registro al congreso',
             emailTemplate('Nueva ficha vendida',
               '<p><strong>' + (registro.nombre || registro.correo) + '</strong> compró la ficha <strong>' + registro.ficha + '</strong>.</p>' +
               '<p style="margin-top:1rem;"><strong>Correo:</strong> ' + registro.correo + '<br><strong>Teléfono:</strong> ' + (registro.telefono || '—') + '</p>',
-              'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
+              'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse/')
           ); }, 3000);
           break;
         }
@@ -614,6 +639,16 @@ async function requireFirebaseUser(req, res, next) {
     next();
   } catch (error) {
     return res.status(401).json({ error: 'La sesión no es válida o expiró' });
+  }
+}
+
+async function requireFirebaseAdmin(req, res, next) {
+  try {
+    const adminDoc = await db.collection('admins').doc(req.firebaseUser.uid).get();
+    if (!adminDoc.exists) return res.status(403).json({ error: 'No tienes permisos de administrador' });
+    next();
+  } catch (error) {
+    return res.status(503).json({ error: 'No se pudieron verificar los permisos' });
   }
 }
 
@@ -946,6 +981,23 @@ app.post('/congreso/cancelar-reserva', async (req, res) => {
     }
     console.error('Cancelar reserva congreso error:', err);
     res.status(500).json({ error: 'No se pudo liberar la reservación' });
+  }
+});
+
+// El panel obtiene los registros desde el mismo backend que procesa Stripe.
+// Así se garantiza que ambos leen el mismo proyecto de Firestore y la ruta
+// queda protegida por el token Firebase y la colección de administradores.
+app.get('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const snap = await db.collection('congresoRegistrations')
+      .orderBy('fechaCompra', 'desc')
+      .limit(500)
+      .get();
+    res.set('Cache-Control', 'no-store');
+    res.json({ registros: snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) });
+  } catch (err) {
+    console.error('GET registros congreso admin error:', err);
+    res.status(500).json({ error: 'No se pudieron cargar los registros del congreso' });
   }
 });
 
@@ -1394,6 +1446,8 @@ app.get('/', (req, res) => {
   res.json({
     status: 'ok',
     service: 'Dermalysse Webhook Server (con precios dinámicos)',
+    firebaseProjectId: serviceAccount.project_id || null,
+    emailNotifications: EMAIL_NOTIFICATIONS_CONFIGURED ? 'configured' : 'missing-config',
     bunnyStream: BUNNY_STREAM_LIBRARY_ID && BUNNY_STREAM_TOKEN_KEY ? 'configured' : 'missing-config',
     bunnyLibraryId: BUNNY_STREAM_LIBRARY_ID || null
   });
