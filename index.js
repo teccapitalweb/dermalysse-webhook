@@ -7,6 +7,14 @@ const bundledCourseCatalog = require('./data/dermalysse-courses.json');
 const { hasCurrentMembership, membershipAccess } = require('./access-policy');
 const { advancePlaybackState, courseReleaseAccess, isLessonSequenceUnlocked } = require('./course-policy');
 const { cancelarReservaCongreso } = require('./congreso-reservation');
+const {
+  QR_TOTAL,
+  codigoQr,
+  normalizarToken,
+  hashToken,
+  perfilQr,
+  perfilPublico
+} = require('./congreso-qr');
 
 // ═══ FIREBASE ADMIN ═══
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
@@ -189,14 +197,14 @@ async function leerFichasCongreso() {
     const snap = await db.collection('config').doc('congreso').get();
     const c = snap.exists ? snap.data() : {};
     return {
-      ficha1Nombre: c.ficha1Nombre || 'Preferente',
-      ficha1Precio: Number(c.ficha1Precio) > 0 ? Number(c.ficha1Precio) : 1000,
+      ficha1Nombre: c.ficha1Nombre || 'Especial',
+      ficha1Precio: Number(c.ficha1Precio) > 0 ? Number(c.ficha1Precio) : 15,
       ficha2Nombre: c.ficha2Nombre || 'General',
-      ficha2Precio: Number(c.ficha2Precio) > 0 ? Number(c.ficha2Precio) : 500
+      ficha2Precio: Number(c.ficha2Precio) > 0 ? Number(c.ficha2Precio) : 10
     };
   } catch (e) {
     console.error('Error leyendo fichas congreso:', e);
-    return { ficha1Nombre: 'Preferente', ficha1Precio: 1000, ficha2Nombre: 'General', ficha2Precio: 500 };
+    return { ficha1Nombre: 'Especial', ficha1Precio: 15, ficha2Nombre: 'General', ficha2Precio: 10 };
   }
 }
 
@@ -1270,7 +1278,12 @@ app.delete('/congreso/admin/registros/:id', requireFirebaseUser, requireFirebase
       const registro = registroSnap.data();
       const asientoId = textoFormulario(registro.asiento, 8).toUpperCase();
       const asientoRef = asientoId ? db.collection('congresoAsientos').doc(asientoId) : null;
-      const asientoSnap = asientoRef ? await tx.get(asientoRef) : null;
+      const qrCodigo = textoFormulario(registro.qrCodigo, 12).toUpperCase();
+      const qrRef = qrCodigo ? db.collection('congresoQrCards').doc(qrCodigo) : null;
+      const [asientoSnap, qrSnap] = await Promise.all([
+        asientoRef ? tx.get(asientoRef) : Promise.resolve(null),
+        qrRef ? tx.get(qrRef) : Promise.resolve(null)
+      ]);
 
       if (asientoRef && asientoSnap?.exists && asientoSnap.data().registroId === req.params.id) {
         tx.set(asientoRef, {
@@ -1278,8 +1291,16 @@ app.delete('/congreso/admin/registros/:id', requireFirebaseUser, requireFirebase
           registroId: null, nombre: null, actualizadoEn: ahora
         }, { merge: true });
       }
+      if (qrRef && qrSnap?.exists && qrSnap.data().asignadoRegistroId === req.params.id) {
+        tx.set(qrRef, {
+          estado: 'disponible', activo: true, consentimientoPublicacion: false,
+          asignadoRegistroId: null, asignadoEn: null, perfil: null,
+          actualizadoEn: ahora
+        }, { merge: true });
+      }
       tx.set(registroRef, {
         estadoRegistro: 'cancelado',
+        qrCodigo: null,
         canceladoEn: ahora,
         canceladoPor: req.firebaseUser.email || req.firebaseUser.uid
       }, { merge: true });
@@ -1319,6 +1340,219 @@ app.patch('/congreso/admin/asientos/:id', requireFirebaseUser, requireFirebaseAd
     if (err.message === 'SEAT_PROTECTED') return res.status(409).json({ error: 'Ese asiento tiene una venta o un pago en proceso' });
     console.error('PATCH asiento congreso admin error:', err);
     res.status(500).json({ error: 'No se pudo cambiar el asiento' });
+  }
+});
+
+// ═══ TARJETAS QR DEL CONGRESO ═══
+// Los 100 códigos impresos contienen tokens aleatorios. Firestore conserva
+// únicamente su hash; ni el panel ni esta API devuelven los tokens originales.
+app.post('/congreso/admin/qr/lote', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const cards = Array.isArray(req.body?.cards) ? req.body.cards : [];
+    if (cards.length !== QR_TOTAL) {
+      return res.status(400).json({ error: `Importa el lote completo de ${QR_TOTAL} tarjetas` });
+    }
+
+    const normalizadas = cards.map((card) => {
+      const numero = Number(card.numero);
+      const codigo = codigoQr(numero);
+      const token = normalizarToken(card.token);
+      if (!codigo || !token) throw new Error('INVALID_QR_BATCH');
+      return { numero, codigo, tokenHash: hashToken(token) };
+    });
+    if (new Set(normalizadas.map((card) => card.codigo)).size !== QR_TOTAL ||
+        new Set(normalizadas.map((card) => card.tokenHash)).size !== QR_TOTAL) {
+      return res.status(400).json({ error: 'El lote contiene números o códigos repetidos' });
+    }
+
+    const existentes = await db.collection('congresoQrCards').get();
+    const porCodigo = new Map(existentes.docs.map((doc) => [doc.id, doc.data()]));
+    const porHash = new Map(existentes.docs.map((doc) => [doc.data().tokenHash, doc.id]));
+    for (const card of normalizadas) {
+      const actual = porCodigo.get(card.codigo);
+      const codigoConHash = porHash.get(card.tokenHash);
+      if ((actual?.tokenHash && actual.tokenHash !== card.tokenHash) ||
+          (codigoConHash && codigoConHash !== card.codigo)) {
+        return res.status(409).json({ error: `La tarjeta ${card.codigo} pertenece a otro lote` });
+      }
+    }
+
+    const batch = db.batch();
+    const ahora = new Date().toISOString();
+    let creadas = 0;
+    for (const card of normalizadas) {
+      if (porCodigo.has(card.codigo)) continue;
+      batch.set(db.collection('congresoQrCards').doc(card.codigo), {
+        numero: card.numero,
+        codigo: card.codigo,
+        tokenHash: card.tokenHash,
+        estado: 'disponible',
+        activo: true,
+        consentimientoPublicacion: false,
+        asignadoRegistroId: null,
+        perfil: null,
+        creadoEn: ahora,
+        creadoPor: req.firebaseUser.email || req.firebaseUser.uid
+      });
+      creadas++;
+    }
+    if (creadas) await batch.commit();
+    res.status(creadas ? 201 : 200).json({ ok: true, creadas, existentes: QR_TOTAL - creadas, total: QR_TOTAL });
+  } catch (err) {
+    if (err.message === 'INVALID_QR_BATCH') return res.status(400).json({ error: 'El archivo del lote no es válido' });
+    console.error('POST lote QR congreso error:', err);
+    res.status(500).json({ error: 'No se pudo importar el lote de tarjetas QR' });
+  }
+});
+
+app.get('/congreso/admin/qr', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const snap = await db.collection('congresoQrCards').orderBy('numero', 'asc').limit(QR_TOTAL).get();
+    const tarjetas = snap.docs.map((doc) => {
+      const { tokenHash, ...data } = doc.data();
+      return { id: doc.id, ...data };
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ tarjetas, totalEsperado: QR_TOTAL });
+  } catch (err) {
+    console.error('GET tarjetas QR congreso error:', err);
+    res.status(500).json({ error: 'No se pudieron cargar las tarjetas QR' });
+  }
+});
+
+app.post('/congreso/admin/qr/asignar', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const codigo = String(req.body?.codigo || '').trim().toUpperCase();
+    const registroId = textoFormulario(req.body?.registroId, 180);
+    if (!/^QR-\d{3}$/.test(codigo) || !registroId) {
+      return res.status(400).json({ error: 'Selecciona una tarjeta y un asistente' });
+    }
+    if (req.body?.consentimientoPublicacion !== true) {
+      return res.status(400).json({ error: 'Confirma la autorización para publicar la tarjeta virtual' });
+    }
+
+    const cardRef = db.collection('congresoQrCards').doc(codigo);
+    const registroRef = db.collection('congresoRegistrations').doc(registroId);
+    const vinculadaQuery = db.collection('congresoQrCards').where('asignadoRegistroId', '==', registroId).limit(1);
+    const ahora = new Date().toISOString();
+    let respuesta;
+
+    await db.runTransaction(async (tx) => {
+      const [cardSnap, registroSnap, vinculadaSnap] = await Promise.all([
+        tx.get(cardRef), tx.get(registroRef), tx.get(vinculadaQuery)
+      ]);
+      if (!cardSnap.exists) throw new Error('QR_NOT_FOUND');
+      if (!registroSnap.exists || registroSnap.data().estadoRegistro === 'cancelado') throw new Error('REG_NOT_FOUND');
+      const card = cardSnap.data();
+      if (card.asignadoRegistroId && card.asignadoRegistroId !== registroId) throw new Error('QR_TAKEN');
+      const otra = vinculadaSnap.docs.find((doc) => doc.id !== codigo);
+      if (otra) throw new Error('REG_ALREADY_LINKED');
+
+      const registro = registroSnap.data();
+      const perfil = perfilQr(req.body?.perfil || {}, registro);
+      if (!perfil.nombre) throw new Error('PROFILE_NAME_REQUIRED');
+      tx.set(cardRef, {
+        estado: 'asignada', activo: true,
+        consentimientoPublicacion: true,
+        asignadoRegistroId: registroId,
+        asignadoEn: card.asignadoEn || ahora,
+        actualizadoEn: ahora,
+        actualizadoPor: req.firebaseUser.email || req.firebaseUser.uid,
+        perfil
+      }, { merge: true });
+      tx.set(registroRef, { qrCodigo: codigo, qrActualizadoEn: ahora }, { merge: true });
+      respuesta = { codigo, registroId, perfil, estado: 'asignada', activo: true };
+    });
+    res.json({ tarjeta: respuesta });
+  } catch (err) {
+    if (err.message === 'QR_NOT_FOUND') return res.status(404).json({ error: 'Ese número de tarjeta QR no existe' });
+    if (err.message === 'REG_NOT_FOUND') return res.status(404).json({ error: 'El asistente no existe o está cancelado' });
+    if (err.message === 'QR_TAKEN') return res.status(409).json({ error: 'Esa tarjeta ya está vinculada a otra persona' });
+    if (err.message === 'REG_ALREADY_LINKED') return res.status(409).json({ error: 'Ese asistente ya tiene otra tarjeta QR' });
+    if (err.message === 'PROFILE_NAME_REQUIRED') return res.status(400).json({ error: 'La tarjeta necesita el nombre del asistente' });
+    console.error('POST asignar QR congreso error:', err);
+    res.status(500).json({ error: 'No se pudo vincular la tarjeta QR' });
+  }
+});
+
+app.put('/congreso/admin/qr/:codigo', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const codigo = String(req.params.codigo || '').trim().toUpperCase();
+    const cardRef = db.collection('congresoQrCards').doc(codigo);
+    const cardSnap = await cardRef.get();
+    if (!cardSnap.exists) return res.status(404).json({ error: 'La tarjeta QR no existe' });
+    const card = cardSnap.data();
+    if (!card.asignadoRegistroId) return res.status(409).json({ error: 'Vincula la tarjeta antes de editarla' });
+    const registroSnap = await db.collection('congresoRegistrations').doc(card.asignadoRegistroId).get();
+    if (!registroSnap.exists) return res.status(404).json({ error: 'No se encontró al asistente vinculado' });
+    const perfil = perfilQr(req.body?.perfil || {}, registroSnap.data());
+    const ahora = new Date().toISOString();
+    const activo = req.body?.activo !== false;
+    await cardRef.set({
+      perfil, activo,
+      consentimientoPublicacion: req.body?.consentimientoPublicacion !== false,
+      actualizadoEn: ahora,
+      actualizadoPor: req.firebaseUser.email || req.firebaseUser.uid
+    }, { merge: true });
+    res.json({ tarjeta: { codigo, ...card, perfil, activo } });
+  } catch (err) {
+    console.error('PUT tarjeta QR congreso error:', err);
+    res.status(500).json({ error: 'No se pudo actualizar la tarjeta virtual' });
+  }
+});
+
+app.delete('/congreso/admin/qr/:codigo/vinculo', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const codigo = String(req.params.codigo || '').trim().toUpperCase();
+    const cardRef = db.collection('congresoQrCards').doc(codigo);
+    const ahora = new Date().toISOString();
+    await db.runTransaction(async (tx) => {
+      const cardSnap = await tx.get(cardRef);
+      if (!cardSnap.exists) throw new Error('QR_NOT_FOUND');
+      const card = cardSnap.data();
+      const registroRef = card.asignadoRegistroId ? db.collection('congresoRegistrations').doc(card.asignadoRegistroId) : null;
+      const registroSnap = registroRef ? await tx.get(registroRef) : null;
+      tx.set(cardRef, {
+        estado: 'disponible', activo: true, consentimientoPublicacion: false,
+        asignadoRegistroId: null, asignadoEn: null, perfil: null,
+        actualizadoEn: ahora, actualizadoPor: req.firebaseUser.email || req.firebaseUser.uid
+      }, { merge: true });
+      if (registroRef && registroSnap?.exists && registroSnap.data().qrCodigo === codigo) {
+        tx.set(registroRef, { qrCodigo: null, qrActualizadoEn: ahora }, { merge: true });
+      }
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.message === 'QR_NOT_FOUND') return res.status(404).json({ error: 'La tarjeta QR no existe' });
+    console.error('DELETE vínculo QR congreso error:', err);
+    res.status(500).json({ error: 'No se pudo liberar la tarjeta QR' });
+  }
+});
+
+// Endpoint público para la tarjeta virtual. Nunca expone notas internas,
+// el ID del registro, el hash ni datos que el asistente haya ocultado.
+app.get('/congreso/tarjeta/:token', async (req, res) => {
+  try {
+    const token = normalizarToken(req.params.token);
+    if (!token) return res.status(404).json({ error: 'Tarjeta no encontrada' });
+    const tokenHash = hashToken(token);
+    const snap = await db.collection('congresoQrCards').where('tokenHash', '==', tokenHash).limit(1).get();
+    if (!snap.docs.length) return res.status(404).json({ error: 'Tarjeta no encontrada' });
+    const doc = snap.docs[0];
+    const card = doc.data();
+    res.set('Cache-Control', 'no-store');
+    res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    if (!card.asignadoRegistroId || card.estado !== 'asignada') {
+      return res.json({ status: 'disponible', codigo: card.codigo });
+    }
+    if (!card.activo || !card.consentimientoPublicacion) {
+      return res.status(403).json({ status: 'privada', error: 'Esta tarjeta virtual no está disponible' });
+    }
+    const perfil = perfilPublico(card.perfil || {});
+    res.json({ status: 'publicada', codigo: card.codigo, perfil });
+  } catch (err) {
+    console.error('GET tarjeta pública congreso error:', err);
+    res.status(500).json({ error: 'No se pudo abrir la tarjeta virtual' });
   }
 });
 
