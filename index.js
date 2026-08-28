@@ -234,15 +234,17 @@ function todosLosAsientos() {
   return out;
 }
 
-// Crea los docs de asientos la primera vez (idempotente: solo si no existen).
+// Crea o repara los docs faltantes sin sobrescribir ventas existentes.
 let _asientosSeeded = false;
 async function asegurarAsientos() {
   if (_asientosSeeded) return;
   const col = db.collection('congresoAsientos');
-  const snap = await col.limit(1).get();
-  if (snap.empty) {
+  const snap = await col.get();
+  const existentes = new Set(snap.docs.map((doc) => doc.id));
+  const faltantes = todosLosAsientos().filter((asiento) => !existentes.has(asiento.id));
+  if (faltantes.length) {
     const batch = db.batch();
-    for (const a of todosLosAsientos()) {
+    for (const a of faltantes) {
       batch.set(col.doc(a.id), {
         fila: a.fila,
         numero: a.numero,
@@ -255,7 +257,7 @@ async function asegurarAsientos() {
       });
     }
     await batch.commit();
-    console.log('🪑 Mapa de asientos creado:', todosLosAsientos().length, 'asientos');
+    console.log('🪑 Asientos faltantes creados:', faltantes.length);
   }
   _asientosSeeded = true;
 }
@@ -287,7 +289,7 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
   }
-  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -350,7 +352,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             };
           }
 
-          const registro = {
+          let registro = {
             nombre: session.customer_details?.name || md.nombre || '',
             correo: session.customer_details?.email || md.correo || '',
             telefono: session.customer_details?.phone || md.telefono || '',
@@ -367,8 +369,23 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           const regRef = db.collection('congresoRegistrations').doc(session.id);
           const regAnterior = await regRef.get();
           const datosAnteriores = regAnterior.exists ? regAnterior.data() : {};
-          await regRef.set(registro, { merge: true });
+          if (regAnterior.exists) {
+            // Un reintento tardío de Stripe nunca debe deshacer cambios hechos
+            // en taquilla (por ejemplo, cambio de asiento o corrección de correo).
+            // Los datos ya guardados prevalecen sobre el payload original.
+            registro = { ...registro, ...datosAnteriores };
+            await regRef.set({ ultimoWebhookEn: new Date().toISOString() }, { merge: true });
+          } else {
+            await regRef.set(registro);
+          }
           console.log('🎟️  Registro de congreso guardado:', registro.correo, '-', registro.ficha, '- asiento', registro.asiento || '—');
+
+          // Si el administrador canceló la entrada, un retry del webhook no
+          // puede volver a ocupar el asiento ni reenviar una confirmación.
+          if (datosAnteriores.estadoRegistro === 'cancelado') {
+            console.log('⏭️  Registro cancelado conservado en webhook:', regRef.id);
+            break;
+          }
 
           // Marcar el asiento como VENDIDO (el hold pasa a definitivo).
           if (registro.asiento) {
@@ -1024,6 +1041,284 @@ app.get('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin, 
   } catch (err) {
     console.error('GET registros congreso admin error:', err);
     res.status(500).json({ error: 'No se pudieron cargar los registros del congreso' });
+  }
+});
+
+function fichaCongresoSeleccionada(fichaId, fichas) {
+  if (fichaId === 'ficha1') {
+    return { id: 'ficha1', nombre: fichas.ficha1Nombre, precio: fichas.ficha1Precio, zona: 'preferente' };
+  }
+  if (fichaId === 'ficha2') {
+    return { id: 'ficha2', nombre: fichas.ficha2Nombre, precio: fichas.ficha2Precio, zona: 'general' };
+  }
+  return null;
+}
+
+function textoFormulario(value, max = 240) {
+  return String(value || '').trim().slice(0, max);
+}
+
+function datosRegistroTaquilla(body, ficha) {
+  const montoIngresado = Number(body.monto);
+  const tieneMonto = body.monto !== '' && body.monto !== null && body.monto !== undefined;
+  return {
+    nombre: textoFormulario(body.nombre, 160),
+    correo: textoFormulario(body.correo, 180).toLowerCase(),
+    telefono: textoFormulario(body.telefono, 60),
+    fichaId: ficha.id,
+    ficha: ficha.nombre,
+    asiento: textoFormulario(body.asiento, 8).toUpperCase(),
+    monto: tieneMonto && Number.isFinite(montoIngresado) && montoIngresado >= 0 ? montoIngresado : ficha.precio,
+    metodoPago: textoFormulario(body.metodoPago || 'efectivo', 40),
+    extra: {
+      Empresa: textoFormulario(body.empresa, 180),
+      'LinkedIn/Web': textoFormulario(body.linkedinWeb, 240),
+      Instagram: textoFormulario(body.instagram, 120),
+      Notas: textoFormulario(body.notas, 600)
+    }
+  };
+}
+
+// La taquilla del panel usa estas rutas para leer y modificar la MISMA base
+// que Stripe. Ningún dato sensible queda expuesto en el mapa público.
+app.get('/congreso/admin/asientos', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    await asegurarAsientos();
+    const snap = await db.collection('congresoAsientos').get();
+    const asientos = snap.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+      estado: estadoEfectivo(doc.data())
+    }));
+    res.set('Cache-Control', 'no-store');
+    res.json({ layout: SEATMAP, asientos });
+  } catch (err) {
+    console.error('GET asientos congreso admin error:', err);
+    res.status(500).json({ error: 'No se pudo cargar el mapa administrativo' });
+  }
+});
+
+app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const fichas = await leerFichasCongreso();
+    const ficha = fichaCongresoSeleccionada(req.body?.fichaId, fichas);
+    if (!ficha) return res.status(400).json({ error: 'Selecciona una ficha válida' });
+
+    const datos = datosRegistroTaquilla(req.body || {}, ficha);
+    if (!datos.nombre) return res.status(400).json({ error: 'Escribe el nombre del asistente' });
+    if (!datos.asiento) return res.status(400).json({ error: 'Selecciona un asiento' });
+    if (req.body?.enviarConfirmacion && !datos.correo) {
+      return res.status(400).json({ error: 'Agrega un correo para enviar la confirmación' });
+    }
+
+    await asegurarAsientos();
+    const registroId = 'manual-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex');
+    const ahora = new Date().toISOString();
+    const registroRef = db.collection('congresoRegistrations').doc(registroId);
+    const asientoRef = db.collection('congresoAsientos').doc(datos.asiento);
+    const registro = {
+      ...datos,
+      fechaCompra: ahora,
+      origen: 'taquilla',
+      estadoRegistro: 'activo',
+      creadoPor: req.firebaseUser.email || req.firebaseUser.uid,
+      stripeSessionId: null,
+      stripeCustomerId: null,
+      notificacionCompra: req.body?.enviarConfirmacion ? 'pendiente' : 'no_solicitada',
+      notificacionEnviadaEn: null
+    };
+
+    await db.runTransaction(async (tx) => {
+      const asientoSnap = await tx.get(asientoRef);
+      if (!asientoSnap.exists) throw new Error('SEAT_NOT_FOUND');
+      const asiento = asientoSnap.data();
+      if (asiento.zona !== ficha.zona) throw new Error('SEAT_WRONG_ZONE');
+      if (estadoEfectivo(asiento) !== 'libre') throw new Error('SEAT_TAKEN');
+
+      tx.set(registroRef, registro);
+      tx.set(asientoRef, {
+        estado: 'vendido',
+        holdUntil: null,
+        sessionId: null,
+        registroId,
+        nombre: datos.nombre,
+        actualizadoEn: ahora
+      }, { merge: true });
+    });
+
+    if (req.body?.enviarConfirmacion && datos.correo) {
+      const notificacion = await sendEmail(
+        datos.correo,
+        '¡Tu ficha al congreso está confirmada!',
+        congresoEmailTemplate('¡Gracias por tu compra!',
+          '<p>Tu ficha <strong>' + ficha.nombre + '</strong> ha sido confirmada.</p>' +
+          '<p><strong>Tu asiento:</strong> ' + datos.asiento + '</p>' +
+          '<p><strong>Monto registrado:</strong> $' + datos.monto.toLocaleString('es-MX') + ' MXN</p>'),
+        { idempotencyKey: 'congreso-manual-' + registroId }
+      );
+      registro.notificacionCompra = notificacion.reason;
+      registro.notificacionEnviadaEn = notificacion.sent ? new Date().toISOString() : null;
+      await registroRef.set({
+        notificacionCompra: registro.notificacionCompra,
+        notificacionEnviadaEn: registro.notificacionEnviadaEn
+      }, { merge: true });
+    }
+
+    res.status(201).json({ registro: { id: registroId, ...registro } });
+  } catch (err) {
+    if (err.message === 'SEAT_NOT_FOUND') return res.status(400).json({ error: 'Ese asiento no existe' });
+    if (err.message === 'SEAT_WRONG_ZONE') return res.status(400).json({ error: 'El asiento no corresponde a la ficha seleccionada' });
+    if (err.message === 'SEAT_TAKEN') return res.status(409).json({ error: 'Ese asiento ya no está disponible' });
+    console.error('POST registro congreso admin error:', err);
+    res.status(500).json({ error: 'No se pudo registrar al asistente' });
+  }
+});
+
+app.put('/congreso/admin/registros/:id', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const fichas = await leerFichasCongreso();
+    const ficha = fichaCongresoSeleccionada(req.body?.fichaId, fichas);
+    if (!ficha) return res.status(400).json({ error: 'Selecciona una ficha válida' });
+    const datos = datosRegistroTaquilla(req.body || {}, ficha);
+    if (!datos.nombre || !datos.asiento) return res.status(400).json({ error: 'Nombre y asiento son obligatorios' });
+    if (req.body?.enviarConfirmacion && !datos.correo) {
+      return res.status(400).json({ error: 'Agrega un correo para enviar la confirmación' });
+    }
+
+    await asegurarAsientos();
+    const registroId = req.params.id;
+    const registroRef = db.collection('congresoRegistrations').doc(registroId);
+    const asientoNuevoRef = db.collection('congresoAsientos').doc(datos.asiento);
+    const ahora = new Date().toISOString();
+    let anterior;
+
+    await db.runTransaction(async (tx) => {
+      const registroSnap = await tx.get(registroRef);
+      if (!registroSnap.exists) throw new Error('REG_NOT_FOUND');
+      anterior = registroSnap.data();
+      const asientoAnteriorId = textoFormulario(anterior.asiento, 8).toUpperCase();
+      const asientoAnteriorRef = asientoAnteriorId ? db.collection('congresoAsientos').doc(asientoAnteriorId) : null;
+
+      const refs = [asientoNuevoRef];
+      if (asientoAnteriorRef && asientoAnteriorId !== datos.asiento) refs.push(asientoAnteriorRef);
+      const snaps = await Promise.all(refs.map((ref) => tx.get(ref)));
+      const asientoNuevoSnap = snaps[0];
+      if (!asientoNuevoSnap.exists) throw new Error('SEAT_NOT_FOUND');
+      const asientoNuevo = asientoNuevoSnap.data();
+      if (asientoNuevo.zona !== ficha.zona) throw new Error('SEAT_WRONG_ZONE');
+      const conservaAsiento = asientoAnteriorId === datos.asiento && asientoNuevo.registroId === registroId;
+      if (!conservaAsiento && estadoEfectivo(asientoNuevo) !== 'libre') throw new Error('SEAT_TAKEN');
+
+      if (asientoAnteriorRef && asientoAnteriorId !== datos.asiento) {
+        const asientoAnterior = snaps[1]?.data();
+        if (asientoAnterior && asientoAnterior.registroId === registroId) {
+          tx.set(asientoAnteriorRef, {
+            estado: 'libre', holdUntil: null, sessionId: null,
+            registroId: null, nombre: null, actualizadoEn: ahora
+          }, { merge: true });
+        }
+      }
+
+      tx.set(asientoNuevoRef, {
+        estado: 'vendido', holdUntil: null, sessionId: anterior.stripeSessionId || null,
+        registroId, nombre: datos.nombre, actualizadoEn: ahora
+      }, { merge: true });
+      tx.set(registroRef, {
+        ...datos,
+        estadoRegistro: 'activo',
+        actualizadoEn: ahora,
+        actualizadoPor: req.firebaseUser.email || req.firebaseUser.uid
+      }, { merge: true });
+    });
+
+    const actualizacion = { ...datos, estadoRegistro: 'activo', actualizadoEn: ahora };
+    if (req.body?.enviarConfirmacion && datos.correo) {
+      const notificacion = await sendEmail(
+        datos.correo,
+        'Actualización de tu ficha al congreso',
+        congresoEmailTemplate('Tu registro está actualizado',
+          '<p>Tu ficha <strong>' + ficha.nombre + '</strong> está confirmada.</p>' +
+          '<p><strong>Tu asiento:</strong> ' + datos.asiento + '</p>'),
+        { idempotencyKey: 'congreso-edicion-' + registroId + '-' + Date.now() }
+      );
+      actualizacion.notificacionCompra = notificacion.reason;
+      actualizacion.notificacionEnviadaEn = notificacion.sent ? new Date().toISOString() : null;
+      await registroRef.set({
+        notificacionCompra: actualizacion.notificacionCompra,
+        notificacionEnviadaEn: actualizacion.notificacionEnviadaEn
+      }, { merge: true });
+    }
+
+    res.json({ registro: { id: registroId, ...anterior, ...actualizacion } });
+  } catch (err) {
+    if (err.message === 'REG_NOT_FOUND') return res.status(404).json({ error: 'El registro ya no existe' });
+    if (err.message === 'SEAT_NOT_FOUND') return res.status(400).json({ error: 'Ese asiento no existe' });
+    if (err.message === 'SEAT_WRONG_ZONE') return res.status(400).json({ error: 'El asiento no corresponde a la ficha seleccionada' });
+    if (err.message === 'SEAT_TAKEN') return res.status(409).json({ error: 'Ese asiento ya no está disponible' });
+    console.error('PUT registro congreso admin error:', err);
+    res.status(500).json({ error: 'No se pudo actualizar al asistente' });
+  }
+});
+
+app.delete('/congreso/admin/registros/:id', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const registroRef = db.collection('congresoRegistrations').doc(req.params.id);
+    const ahora = new Date().toISOString();
+    await db.runTransaction(async (tx) => {
+      const registroSnap = await tx.get(registroRef);
+      if (!registroSnap.exists) throw new Error('REG_NOT_FOUND');
+      const registro = registroSnap.data();
+      const asientoId = textoFormulario(registro.asiento, 8).toUpperCase();
+      const asientoRef = asientoId ? db.collection('congresoAsientos').doc(asientoId) : null;
+      const asientoSnap = asientoRef ? await tx.get(asientoRef) : null;
+
+      if (asientoRef && asientoSnap?.exists && asientoSnap.data().registroId === req.params.id) {
+        tx.set(asientoRef, {
+          estado: 'libre', holdUntil: null, sessionId: null,
+          registroId: null, nombre: null, actualizadoEn: ahora
+        }, { merge: true });
+      }
+      tx.set(registroRef, {
+        estadoRegistro: 'cancelado',
+        canceladoEn: ahora,
+        canceladoPor: req.firebaseUser.email || req.firebaseUser.uid
+      }, { merge: true });
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.message === 'REG_NOT_FOUND') return res.status(404).json({ error: 'El registro ya no existe' });
+    console.error('DELETE registro congreso admin error:', err);
+    res.status(500).json({ error: 'No se pudo cancelar el registro' });
+  }
+});
+
+app.patch('/congreso/admin/asientos/:id', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
+  try {
+    const accion = req.body?.accion;
+    if (!['bloquear', 'liberar'].includes(accion)) return res.status(400).json({ error: 'Acción inválida' });
+    await asegurarAsientos();
+    const asientoRef = db.collection('congresoAsientos').doc(req.params.id.toUpperCase());
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(asientoRef);
+      if (!snap.exists) throw new Error('SEAT_NOT_FOUND');
+      const asiento = snap.data();
+      if (asiento.zona === 'ponente') throw new Error('SPEAKER_SEAT');
+      const estado = estadoEfectivo(asiento);
+      if (estado === 'vendido' || estado === 'hold') throw new Error('SEAT_PROTECTED');
+      tx.set(asientoRef, {
+        estado: accion === 'bloquear' ? 'bloqueado' : 'libre',
+        holdUntil: null,
+        sessionId: null,
+        actualizadoEn: new Date().toISOString()
+      }, { merge: true });
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err.message === 'SEAT_NOT_FOUND') return res.status(404).json({ error: 'Ese asiento no existe' });
+    if (err.message === 'SPEAKER_SEAT') return res.status(400).json({ error: 'Los lugares de ponentes permanecen reservados' });
+    if (err.message === 'SEAT_PROTECTED') return res.status(409).json({ error: 'Ese asiento tiene una venta o un pago en proceso' });
+    console.error('PATCH asiento congreso admin error:', err);
+    res.status(500).json({ error: 'No se pudo cambiar el asiento' });
   }
 });
 
