@@ -92,24 +92,50 @@ async function sendEmail(to, subject, html, options = {}) {
   }
 }
 
-function congresoEmailTemplate(title, body) {
+function congresoEmailTemplate(title, body, opts) {
+  opts = opts || {};
+  const incluirBeneficios = opts.incluirBeneficios === true;
+
+  const membresiaBoton = incluirBeneficios ? `
+        <a href="https://club.dermalyssemx.com/?auth=register" style="display:block;margin:10px auto 0;max-width:320px;border:2px solid #087f78;background:#ffffff;color:#087f78;padding:11px 25px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Activar mi membresía</a>` : '';
+
+  const whatsappSection = incluirBeneficios ? `
+    <div style="margin:26px 32px 0;border-radius:12px;border:1px solid #d7eeea;background:#f5fbfa;padding:22px 24px;">
+      <p style="margin:0 0 6px;color:#062d2b;font-size:14px;font-weight:700;">Atención por WhatsApp</p>
+      <p style="margin:0 0 12px;color:#365653;font-size:13px;line-height:1.65;">Datos de gafete y membresía gratis.</p>
+      <a href="https://wa.me/5212381479821" style="display:inline-block;color:#087f78;font-weight:700;text-decoration:none;font-size:14px;">+52 1 238 147 9821</a>
+    </div>` : '';
+
   return `
-  <div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;background:#f5fbfa;border:1px solid #d7eeea;">
-    <div style="background:#062d2b;padding:30px 36px;text-align:center;border-bottom:4px solid #21d4bd;">
-      <p style="color:#69ead8;letter-spacing:3px;font-size:11px;font-weight:700;margin:0 0 8px;">BIO SKIN</p>
-      <h1 style="color:#ffffff;margin:0;font-size:25px;">Congress 2026</h1>
+  <div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;background:#f5fbfa;border:1px solid #d7eeea;border-radius:14px;overflow:hidden;">
+    <div style="background:#062d2b;padding:32px 26px;text-align:center;border-bottom:4px solid #21d4bd;">
+      <p style="color:#69ead8;letter-spacing:3px;font-size:11px;font-weight:700;margin:0 0 10px;">BIO SKIN</p>
+      <h1 style="color:#ffffff;margin:0;font-size:24px;line-height:1.2;">Congress 2026</h1>
     </div>
-    <div style="padding:34px 38px;">
-      <h2 style="color:#062d2b;margin:0 0 18px;font-size:24px;">${title}</h2>
+    <div style="padding:34px 28px 8px;">
+      <h2 style="color:#062d2b;margin:0 0 20px;font-size:21px;line-height:1.2;white-space:nowrap;">${title}</h2>
       <div style="color:#365653;font-size:15px;line-height:1.75;">${body}</div>
       <div style="text-align:center;margin-top:30px;">
-        <a href="https://congreso.dermalyssemx.com/#pases" style="background:#087f78;color:#ffffff;padding:13px 25px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver información del congreso</a>
+        <a href="https://congreso.dermalyssemx.com/#pases" style="display:block;margin:0 auto;max-width:320px;background:#087f78;color:#ffffff;padding:13px 25px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Ver información del congreso</a>
+        <a href="https://congreso.dermalyssemx.com/#programa" style="display:block;margin:10px auto 0;max-width:320px;background:#21d4bd;color:#062d2b;padding:13px 25px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Ver itinerario</a>
+        ${membresiaBoton}
       </div>
     </div>
-    <div style="padding:18px 32px;text-align:center;background:#e9f7f4;color:#61817d;font-size:12px;">
+    ${whatsappSection}
+    <div style="padding:22px 32px;text-align:center;background:#e9f7f4;color:#61817d;font-size:12px;margin-top:${incluirBeneficios ? '26px' : '10px'};">
       Dermalysse · BIO SKIN Congress 2026
     </div>
   </div>`;
+}
+
+function congresoDatosCard(filas) {
+  const items = filas.filter(function(f){ return f.valor; }).map(function(f){
+    return '<tr>' +
+      '<td style="padding:12px 0;border-bottom:1px solid #d7eeea;color:#61817d;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;">' + f.label + '</td>' +
+      '<td style="padding:12px 0;border-bottom:1px solid #d7eeea;color:#062d2b;font-size:15px;font-weight:700;text-align:right;">' + f.valor + '</td>' +
+      '</tr>';
+  }).join('');
+  return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;border-collapse:collapse;">' + items + '</table>';
 }
 
 function emailTemplate(title, body, buttonText, buttonUrl) {
@@ -416,9 +442,14 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           if (registro.correo && !datosAnteriores.notificacionEnviadaEn) {
             const notificacion = await sendEmail(registro.correo, '¡Tu ficha al congreso está confirmada!',
               congresoEmailTemplate('¡Gracias por tu compra!',
-                '<p>Tu ficha <strong>' + registro.ficha + '</strong> ha sido confirmada.</p>' +
-                (registro.asiento ? '<p><strong>Tu asiento:</strong> ' + registro.asiento + '</p>' : '') +
-                (registro.monto ? '<p><strong>Monto pagado:</strong> $' + registro.monto.toLocaleString('es-MX') + ' MXN</p>' : '')),
+                '<p style="margin:0 0 4px;">Tu ficha ha sido confirmada. Aquí tienes el resumen de tu registro:</p>' +
+                congresoDatosCard([
+                  { label: 'Ficha', valor: registro.ficha },
+                  { label: 'Asiento', valor: registro.asiento || null },
+                  { label: 'Monto pagado', valor: registro.monto ? ('$' + registro.monto.toLocaleString('es-MX') + ' MXN') : null }
+                ]),
+                { incluirBeneficios: true }
+              ),
               { idempotencyKey: 'congreso-comprador-' + session.id }
             );
             await regRef.set({
@@ -1165,9 +1196,14 @@ app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin,
         datos.correo,
         '¡Tu ficha al congreso está confirmada!',
         congresoEmailTemplate('¡Gracias por tu compra!',
-          '<p>Tu ficha <strong>' + ficha.nombre + '</strong> ha sido confirmada.</p>' +
-          '<p><strong>Tu asiento:</strong> ' + datos.asiento + '</p>' +
-          '<p><strong>Monto registrado:</strong> $' + datos.monto.toLocaleString('es-MX') + ' MXN</p>'),
+          '<p style="margin:0 0 4px;">Tu ficha ha sido confirmada. Aquí tienes el resumen de tu registro:</p>' +
+          congresoDatosCard([
+            { label: 'Ficha', valor: ficha.nombre },
+            { label: 'Asiento', valor: datos.asiento },
+            { label: 'Monto registrado', valor: '$' + datos.monto.toLocaleString('es-MX') + ' MXN' }
+          ]),
+          { incluirBeneficios: true }
+        ),
         { idempotencyKey: 'congreso-manual-' + registroId }
       );
       registro.notificacionCompra = notificacion.reason;
