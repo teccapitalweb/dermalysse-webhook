@@ -106,7 +106,16 @@ function congresoEmailTemplate(title, body, opts) {
       <a href="https://wa.me/5212381479821" style="display:inline-block;color:#087f78;font-weight:700;text-decoration:none;font-size:14px;">+52 1 238 147 9821</a>
     </div>` : '';
 
-  return `
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background:#f5fbfa;">
   <div style="font-family:Arial,Helvetica,sans-serif;max-width:620px;margin:0 auto;background:#f5fbfa;border:1px solid #d7eeea;border-radius:14px;overflow:hidden;">
     <div style="background:#062d2b;padding:32px 26px;text-align:center;border-bottom:4px solid #21d4bd;">
       <p style="color:#69ead8;letter-spacing:3px;font-size:11px;font-weight:700;margin:0 0 10px;">BIO SKIN</p>
@@ -125,7 +134,9 @@ function congresoEmailTemplate(title, body, opts) {
     <div style="padding:22px 32px;text-align:center;background:#e9f7f4;color:#61817d;font-size:12px;margin-top:${incluirBeneficios ? '26px' : '10px'};">
       Dermalysse · BIO SKIN Congress 2026
     </div>
-  </div>`;
+  </div>
+</body>
+</html>`;
 }
 
 function congresoDatosCard(filas) {
