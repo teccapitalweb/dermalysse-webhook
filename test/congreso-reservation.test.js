@@ -1,17 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { cancelarReservaCongreso } = require('../congreso-reservation');
+const { cancelarReservaCongreso, normalizarAsientosCongreso } = require('../congreso-reservation');
 
-function crearDb(asiento) {
+function crearDb(asientos) {
+  const mapa = asientos && asientos.estado ? { A1: asientos } : asientos;
   const actualizaciones = [];
-  const ref = { id: 'A1' };
   return {
     actualizaciones,
     db: {
-      collection: () => ({ doc: () => ref }),
+      collection: () => ({ doc: (id) => ({ id }) }),
       runTransaction: async (fn) => fn({
-        get: async () => ({ exists: true, data: () => asiento }),
-        update: (_ref, data) => actualizaciones.push(data)
+        get: async (ref) => ({ exists: Boolean(mapa[ref.id]), data: () => mapa[ref.id] }),
+        update: (ref, data) => actualizaciones.push({ id: ref.id, ...data })
       })
     }
   };
@@ -90,4 +90,29 @@ test('protege la venta si el pago termina durante la cancelación', async () => 
 
   assert.equal(resultado.motivo, 'pagado');
   assert.equal(actualizaciones.length, 0);
+});
+
+test('libera todos los lugares de una compra grupal en una sola transacción', async () => {
+  const inicial = sesion({ metadata: { source: 'congreso', asiento: 'A1', asientos: '["A1","A2","A3"]' } });
+  const stripe = { checkout: { sessions: {
+    retrieve: async () => inicial,
+    expire: async () => ({ ...inicial, status: 'expired' })
+  } } };
+  const { db, actualizaciones } = crearDb({
+    A1: { estado: 'hold', sessionId: inicial.id },
+    A2: { estado: 'hold', sessionId: inicial.id },
+    A3: { estado: 'hold', sessionId: inicial.id }
+  });
+
+  const resultado = await cancelarReservaCongreso({ stripe, db, sessionId: inicial.id });
+
+  assert.deepEqual(resultado.asientos, ['A1', 'A2', 'A3']);
+  assert.deepEqual(resultado.liberados, ['A1', 'A2', 'A3']);
+  assert.deepEqual(actualizaciones.map((item) => item.id), ['A1', 'A2', 'A3']);
+});
+
+test('normaliza listas, elimina duplicados y conserva compatibilidad singular', () => {
+  assert.deepEqual(normalizarAsientosCongreso(['a1', ' A2 ', 'A1']), ['A1', 'A2']);
+  assert.deepEqual(normalizarAsientosCongreso(undefined, 'e4'), ['E4']);
+  assert.deepEqual(normalizarAsientosCongreso('["F1","F2"]'), ['F1', 'F2']);
 });

@@ -6,7 +6,7 @@ const admin = require('firebase-admin');
 const bundledCourseCatalog = require('./data/dermalysse-courses.json');
 const { hasCurrentMembership, membershipAccess } = require('./access-policy');
 const { advancePlaybackState, courseReleaseAccess, isLessonSequenceUnlocked } = require('./course-policy');
-const { cancelarReservaCongreso } = require('./congreso-reservation');
+const { cancelarReservaCongreso, normalizarAsientosCongreso } = require('./congreso-reservation');
 const {
   QR_TOTAL,
   codigoQr,
@@ -386,67 +386,95 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             };
           }
 
-          let registro = {
-            nombre: session.customer_details?.name || md.nombre || '',
-            correo: session.customer_details?.email || md.correo || '',
-            telefono: session.customer_details?.phone || md.telefono || '',
-            ficha: md.fichaNombre || md.ficha || '',
-            asiento: md.asiento || null,
-            monto: session.amount_total ? session.amount_total / 100 : null,
-            fechaCompra: new Date().toISOString(),
-            stripeSessionId: session.id,
-            stripeCustomerId: customerId || null,
-            extra
-          };
-          // El ID de sesión vuelve idempotente el procesamiento: si Stripe
-          // reintenta el webhook, no duplica ni el registro ni la confirmación.
-          const regRef = db.collection('congresoRegistrations').doc(session.id);
-          const eliminadoRef = db.collection('congresoDeletedRegistrations').doc(session.id);
-          const eliminadoSnap = await eliminadoRef.get();
-          if (eliminadoSnap.exists) {
-            console.log('⏭️  Registro eliminado definitivamente; webhook ignorado:', session.id);
-            break;
-          }
-          const regAnterior = await regRef.get();
-          const datosAnteriores = regAnterior.exists ? regAnterior.data() : {};
-          if (regAnterior.exists) {
-            // Un reintento tardío de Stripe nunca debe deshacer cambios hechos
-            // en taquilla (por ejemplo, cambio de asiento o corrección de correo).
-            // Los datos ya guardados prevalecen sobre el payload original.
-            registro = { ...registro, ...datosAnteriores };
-            await regRef.set({ ultimoWebhookEn: new Date().toISOString() }, { merge: true });
-          } else {
-            await regRef.set(registro);
-          }
-          console.log('🎟️  Registro de congreso guardado:', registro.correo, '-', registro.ficha, '- asiento', registro.asiento || '—');
+          const asientosCompra = normalizarAsientosCongreso(md.asientos, md.asiento);
+          const asientosParaRegistrar = asientosCompra.length ? asientosCompra : [null];
+          const cantidadBoletos = asientosParaRegistrar.length;
+          const montoTotalCompra = session.amount_total ? session.amount_total / 100 : null;
+          const montoPorLugar = montoTotalCompra === null ? null : montoTotalCompra / cantidadBoletos;
+          const registrosActivos = [];
 
-          // Si el administrador canceló la entrada, un retry del webhook no
-          // puede volver a ocupar el asiento ni reenviar una confirmación.
-          if (datosAnteriores.estadoRegistro === 'cancelado') {
-            console.log('⏭️  Registro cancelado conservado en webhook:', regRef.id);
-            break;
+          // Cada lugar se guarda como registro independiente. Así una compra de
+          // grupo puede recibir un QR por asistente y el panel puede cancelar o
+          // editar un lugar sin afectar los demás.
+          for (const asientoCompra of asientosParaRegistrar) {
+            let registro = {
+              nombre: session.customer_details?.name || md.nombre || '',
+              correo: session.customer_details?.email || md.correo || '',
+              telefono: session.customer_details?.phone || md.telefono || '',
+              fichaId: md.ficha || '',
+              ficha: md.fichaNombre || md.ficha || '',
+              asiento: asientoCompra,
+              monto: montoPorLugar,
+              montoTotalCompra,
+              cantidadBoletos,
+              asientosGrupo: asientosCompra,
+              compraGrupoId: session.id,
+              metodoPago: 'stripe',
+              fechaCompra: new Date().toISOString(),
+              stripeSessionId: session.id,
+              stripeCustomerId: customerId || null,
+              extra
+            };
+            // Una venta individual conserva el ID histórico. En grupo, el ID
+            // combina sesión + lugar para mantener idempotencia por boleto.
+            const registroId = cantidadBoletos === 1 || !asientoCompra
+              ? session.id
+              : `${session.id}_${asientoCompra.toLowerCase()}`;
+            const regRef = db.collection('congresoRegistrations').doc(registroId);
+            const eliminadoRef = db.collection('congresoDeletedRegistrations').doc(registroId);
+            const eliminadoSnap = await eliminadoRef.get();
+            if (eliminadoSnap.exists) {
+              console.log('⏭️  Registro eliminado definitivamente; webhook ignorado:', registroId);
+              continue;
+            }
+            const regAnterior = await regRef.get();
+            const datosAnteriores = regAnterior.exists ? regAnterior.data() : {};
+            if (regAnterior.exists) {
+              // Un reintento tardío de Stripe nunca debe deshacer cambios hechos
+              // en taquilla (por ejemplo, cambio de asiento o corrección de correo).
+              registro = { ...registro, ...datosAnteriores };
+              await regRef.set({ ultimoWebhookEn: new Date().toISOString() }, { merge: true });
+            } else {
+              await regRef.set(registro);
+            }
+            console.log('🎟️  Registro de congreso guardado:', registro.correo, '-', registro.ficha, '- asiento', registro.asiento || '—');
+
+            // Si el administrador canceló este boleto, un retry del webhook no
+            // puede volver a ocupar su lugar.
+            if (datosAnteriores.estadoRegistro === 'cancelado') {
+              console.log('⏭️  Registro cancelado conservado en webhook:', regRef.id);
+              continue;
+            }
+
+            if (registro.asiento) {
+              await db.collection('congresoAsientos').doc(registro.asiento).set({
+                estado: 'vendido',
+                holdUntil: null,
+                sessionId: session.id,
+                registroId: regRef.id,
+                nombre: registro.nombre || registro.correo || '',
+                actualizadoEn: new Date().toISOString()
+              }, { merge: true }).catch((e) => console.error('Error marcando asiento vendido:', e));
+            }
+            registrosActivos.push({ regRef, registro, datosAnteriores });
           }
 
-          // Marcar el asiento como VENDIDO (el hold pasa a definitivo).
-          if (registro.asiento) {
-            await db.collection('congresoAsientos').doc(registro.asiento).set({
-              estado: 'vendido',
-              holdUntil: null,
-              sessionId: session.id,
-              registroId: regRef.id,
-              nombre: registro.nombre || registro.correo || '',
-              actualizadoEn: new Date().toISOString()
-            }, { merge: true }).catch((e) => console.error('Error marcando asiento vendido:', e));
-          }
+          const principal = registrosActivos[0];
+          if (!principal) break;
+          const { regRef, registro, datosAnteriores } = principal;
+          const etiquetaLugares = asientosCompra.length > 1 ? 'Lugares' : 'Lugar';
+          const valorLugares = asientosCompra.join(', ') || registro.asiento || null;
 
+          // Una compra de grupo genera un solo correo de confirmación.
           if (registro.correo && !datosAnteriores.notificacionEnviadaEn) {
-            const notificacion = await sendEmail(registro.correo, '¡Tu ficha al congreso está confirmada!',
+            const notificacion = await sendEmail(registro.correo, '¡Tus lugares al congreso están confirmados!',
               congresoEmailTemplate('¡Gracias por tu compra!',
-                '<p style="margin:0 0 4px;">Tu ficha ha sido confirmada. Aquí tienes el resumen de tu registro:</p>' +
+                '<p style="margin:0 0 4px;">Tu compra ha sido confirmada. Aquí tienes el resumen:</p>' +
                 congresoDatosCard([
                   { label: 'Ficha', valor: registro.ficha },
-                  { label: 'Asiento', valor: registro.asiento || null },
-                  { label: 'Monto pagado', valor: registro.monto ? ('$' + registro.monto.toLocaleString('es-MX') + ' MXN') : null }
+                  { label: etiquetaLugares, valor: valorLugares },
+                  { label: 'Cantidad', valor: cantidadBoletos },
+                  { label: 'Monto pagado', valor: montoTotalCompra ? ('$' + montoTotalCompra.toLocaleString('es-MX') + ' MXN') : null }
                 ]),
                 { incluirBeneficios: true }
               ),
@@ -462,9 +490,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           setTimeout(function(){
             sendEmail(
               ADMIN_EMAIL,
-              'Nuevo registro al congreso',
-              congresoEmailTemplate('Nueva ficha vendida',
-                '<p><strong>' + (registro.nombre || registro.correo) + '</strong> compró la ficha <strong>' + registro.ficha + '</strong>.</p>' +
+              cantidadBoletos > 1 ? 'Nueva compra grupal al congreso' : 'Nuevo registro al congreso',
+              congresoEmailTemplate(cantidadBoletos > 1 ? 'Nueva compra grupal' : 'Nueva ficha vendida',
+                '<p><strong>' + (registro.nombre || registro.correo) + '</strong> compró <strong>' + cantidadBoletos + '</strong> ' + (cantidadBoletos === 1 ? 'lugar' : 'lugares') + ' de la ficha <strong>' + registro.ficha + '</strong>.</p>' +
+                '<p><strong>Lugares:</strong> ' + valorLugares + '</p>' +
                 '<p style="margin-top:1rem;"><strong>Correo:</strong> ' + registro.correo + '<br><strong>Teléfono:</strong> ' + (registro.telefono || '—') + '</p>'),
               { idempotencyKey: 'congreso-admin-' + session.id }
             );
@@ -546,20 +575,22 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
       // ─── Checkout abandonado: liberar el asiento apartado del congreso ───
       case 'checkout.session.expired': {
         const session = event.data.object;
-        if (session.metadata?.source === 'congreso' && session.metadata?.asiento) {
-          const ref = db.collection('congresoAsientos').doc(session.metadata.asiento);
+        const asientosExpirados = normalizarAsientosCongreso(session.metadata?.asientos, session.metadata?.asiento);
+        if (session.metadata?.source === 'congreso' && asientosExpirados.length) {
+          const refs = asientosExpirados.map((asiento) => db.collection('congresoAsientos').doc(asiento));
           try {
             await db.runTransaction(async (tx) => {
-              const doc = await tx.get(ref);
-              if (!doc.exists) return;
-              const a = doc.data();
-              // Solo liberar si el hold es de ESTA sesión (no pisar una venta
-              // posterior del mismo asiento por otra persona).
-              if (a.estado === 'hold' && a.sessionId === session.id) {
-                tx.update(ref, { estado: 'libre', holdUntil: null, sessionId: null, actualizadoEn: new Date().toISOString() });
-              }
+              const docs = await Promise.all(refs.map((ref) => tx.get(ref)));
+              docs.forEach((doc, index) => {
+                if (!doc.exists) return;
+                const a = doc.data();
+                // Solo liberar holds de ESTA sesión (no pisar una venta posterior).
+                if (a.estado === 'hold' && a.sessionId === session.id) {
+                  tx.update(refs[index], { estado: 'libre', holdUntil: null, sessionId: null, actualizadoEn: new Date().toISOString() });
+                }
+              });
             });
-            console.log('🪑 Asiento liberado por sesión expirada:', session.metadata.asiento);
+            console.log('🪑 Lugares liberados por sesión expirada:', asientosExpirados.join(', '));
           } catch (e) {
             console.error('Error liberando asiento:', e);
           }
@@ -934,11 +965,11 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
   try {
     /*
       FLUJO DIRECTO A STRIPE con selección de asiento tipo cine:
-      1. El frontend manda { ficha, asiento } (el asiento elegido en el mapa).
-      2. Se valida que el asiento exista, sea de la zona de esa ficha
+      1. El frontend manda { ficha, asientos } (entre 1 y 10 lugares).
+      2. Se valida que todos existan, sean de la zona de esa ficha
          (ficha1=preferente filas A–D, ficha2=general filas E–J) y esté libre.
-      3. TRANSACCIÓN de Firestore: se aparta con 'hold' 35 min — dos personas
-         no pueden apartar el mismo asiento aunque paguen al mismo tiempo.
+      3. TRANSACCIÓN de Firestore: el grupo completo se aparta con 'hold' 35 min.
+         Si un lugar ya no está libre, no se crea una compra parcial.
       4. La sesión de Stripe expira a los 30 min (expires_at): si no paga,
          checkout.session.expired libera el asiento; el hold vence solo como
          red de seguridad extra.
@@ -946,13 +977,17 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
       teléfono con phone_number_collection, networking en custom_fields (máx 3).
       El registro se crea en el webhook checkout.session.completed.
     */
-    const { ficha, asiento, successUrl, cancelUrl } = req.body;
+    const { ficha, asiento, asientos: asientosSolicitados, successUrl, cancelUrl } = req.body;
 
     if (!['ficha1', 'ficha2'].includes(ficha)) {
       return res.status(400).json({ error: 'Ficha inválida' });
     }
-    if (!asiento || typeof asiento !== 'string') {
-      return res.status(400).json({ error: 'Elige un asiento para continuar' });
+    const asientos = normalizarAsientosCongreso(asientosSolicitados, asiento);
+    if (asientos.length === 0) {
+      return res.status(400).json({ error: 'Elige al menos un lugar para continuar' });
+    }
+    if (asientos.length > 10) {
+      return res.status(400).json({ error: 'Puedes reservar hasta 10 lugares en una sola compra' });
     }
 
     const fichas = await leerFichasCongreso();
@@ -965,27 +1000,33 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
 
     await asegurarAsientos();
     const zonaEsperada = ZONA_POR_FICHA[ficha];
-    const asientoRef = db.collection('congresoAsientos').doc(asiento.toUpperCase());
+    const asientoRefs = asientos.map((id) => db.collection('congresoAsientos').doc(id));
 
-    // Apartar el asiento ANTES de crear la sesión de Stripe.
+    // Apartar el grupo completo ANTES de crear la sesión de Stripe.
     try {
       await db.runTransaction(async (tx) => {
-        const doc = await tx.get(asientoRef);
-        if (!doc.exists) throw new Error('SEAT_NOT_FOUND');
-        const data = doc.data();
-        if (data.zona !== zonaEsperada) throw new Error('SEAT_WRONG_ZONE');
-        if (estadoEfectivo(data) !== 'libre') throw new Error('SEAT_TAKEN');
-        tx.update(asientoRef, {
-          estado: 'hold',
-          holdUntil: new Date(Date.now() + HOLD_MINUTOS * 60000).toISOString(),
-          sessionId: null,
-          actualizadoEn: new Date().toISOString()
+        const docs = await Promise.all(asientoRefs.map((ref) => tx.get(ref)));
+        docs.forEach((doc) => {
+          if (!doc.exists) throw new Error('SEAT_NOT_FOUND');
+          const data = doc.data();
+          if (data.zona !== zonaEsperada) throw new Error('SEAT_WRONG_ZONE');
+          if (estadoEfectivo(data) !== 'libre') throw new Error('SEAT_TAKEN');
+        });
+        const holdUntil = new Date(Date.now() + HOLD_MINUTOS * 60000).toISOString();
+        const actualizadoEn = new Date().toISOString();
+        asientoRefs.forEach((ref) => {
+          tx.update(ref, {
+            estado: 'hold',
+            holdUntil,
+            sessionId: null,
+            actualizadoEn
+          });
         });
       });
     } catch (e) {
-      if (e.message === 'SEAT_NOT_FOUND') return res.status(400).json({ error: 'Ese asiento no existe' });
-      if (e.message === 'SEAT_WRONG_ZONE') return res.status(400).json({ error: 'Ese asiento no corresponde a la ficha ' + fichaNombre });
-      if (e.message === 'SEAT_TAKEN') return res.status(409).json({ error: 'Ese asiento acaba de ocuparse, elige otro' });
+      if (e.message === 'SEAT_NOT_FOUND') return res.status(400).json({ error: 'Uno de esos lugares no existe' });
+      if (e.message === 'SEAT_WRONG_ZONE') return res.status(400).json({ error: 'Uno de esos lugares no corresponde a la ficha ' + fichaNombre });
+      if (e.message === 'SEAT_TAKEN') return res.status(409).json({ error: 'Uno de esos lugares acaba de ocuparse; revisa tu selección' });
       throw e;
     }
 
@@ -998,10 +1039,10 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
             currency: 'mxn',
             unit_amount: Math.round(monto * 100),
             product_data: {
-              name: `Congreso DermaFutura · Ficha ${fichaNombre} · Asiento ${asiento.toUpperCase()}`
+              name: `Congreso DermaFutura · Ficha ${fichaNombre} · ${asientos.length === 1 ? `Lugar ${asientos[0]}` : `${asientos.length} lugares (${asientos.join(', ')})`}`
             }
           },
-          quantity: 1
+          quantity: asientos.length
         }],
         mode: 'payment',
         // 30 min es el mínimo que permite Stripe; si no paga, el asiento se libera.
@@ -1036,19 +1077,26 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
           source: 'congreso',
           ficha,
           fichaNombre,
-          asiento: asiento.toUpperCase()
+          asiento: asientos[0],
+          asientos: JSON.stringify(asientos),
+          cantidad: String(asientos.length)
         }
       });
     } catch (e) {
-      // Si Stripe falla, no dejar el asiento colgado en hold.
-      await asientoRef.update({ estado: 'libre', holdUntil: null, sessionId: null, actualizadoEn: new Date().toISOString() }).catch(() => {});
+      // Si Stripe falla, no dejar ningún lugar del grupo colgado en hold.
+      await Promise.all(asientoRefs.map((ref) => ref.update({
+        estado: 'libre',
+        holdUntil: null,
+        sessionId: null,
+        actualizadoEn: new Date().toISOString()
+      }).catch(() => {})));
       throw e;
     }
 
-    // Amarrar el hold a esta sesión para poder liberarlo si expira.
-    await asientoRef.update({ sessionId: session.id }).catch(() => {});
+    // Amarrar todos los holds a esta sesión para poder liberarlos si expira.
+    await Promise.all(asientoRefs.map((ref) => ref.update({ sessionId: session.id }).catch(() => {})));
 
-    res.json({ url: session.url, sessionId: session.id });
+    res.json({ url: session.url, sessionId: session.id, asientos });
   } catch (err) {
     console.error('Checkout congreso error:', err);
     res.status(500).json({ error: err.message });
