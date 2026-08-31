@@ -1034,7 +1034,7 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
       desde el enlace privado enviado por correo.
       El registro se crea en el webhook checkout.session.completed.
     */
-    const { ficha, asiento, asientos: asientosSolicitados, successUrl, cancelUrl } = req.body;
+    const { ficha, asiento, asientos: asientosSolicitados, successUrl, cancelUrl, comprador } = req.body;
 
     if (!['ficha1', 'ficha2'].includes(ficha)) {
       return res.status(400).json({ error: 'Ficha inválida' });
@@ -1087,8 +1087,26 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
       throw e;
     }
 
+    const compradorRecordado = comprador && typeof comprador === 'object' ? {
+      nombre: textoFormulario(comprador.nombre, 140),
+      correo: textoFormulario(comprador.correo, 180).toLowerCase(),
+      telefono: textoFormulario(comprador.telefono, 60)
+    } : { nombre: '', correo: '', telefono: '' };
+    const correoRecordadoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(compradorRecordado.correo);
+
     let session;
+    let customerCreadoId = '';
     try {
+      if (correoRecordadoValido) {
+        const customer = await stripe.customers.create({
+          email: compradorRecordado.correo,
+          ...(compradorRecordado.nombre ? { name: compradorRecordado.nombre } : {}),
+          ...(compradorRecordado.telefono ? { phone: compradorRecordado.telefono } : {}),
+          metadata: { source: 'congreso_autocompletado' }
+        });
+        customerCreadoId = customer.id;
+      }
+
       session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [{
@@ -1102,7 +1120,7 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
           quantity: asientos.length
         }],
         mode: 'payment',
-        customer_creation: 'always',
+        ...(customerCreadoId ? { customer: customerCreadoId } : { customer_creation: 'always' }),
         // 30 min es el mínimo que permite Stripe; si no paga, el asiento se libera.
         expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
         // Teléfono lo pide Stripe de forma nativa:
@@ -1130,6 +1148,9 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
         }
       });
     } catch (e) {
+      if (customerCreadoId) {
+        await stripe.customers.del(customerCreadoId).catch(() => {});
+      }
       // Si Stripe falla, no dejar ningún lugar del grupo colgado en hold.
       await Promise.all(asientoRefs.map((ref) => ref.update({
         estado: 'libre',

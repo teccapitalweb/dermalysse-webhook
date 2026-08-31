@@ -17,6 +17,9 @@ test('aparta el grupo completo en una transacción antes de abrir Stripe', () =>
   assert.match(route, /asientos: JSON\.stringify\(asientos\)/);
   assert.match(route, /name_collection/);
   assert.match(route, /phone_number_collection/);
+  assert.match(route, /stripe\.customers\.create/);
+  assert.match(route, /customer: customerCreadoId/);
+  assert.match(route, /customer_creation: 'always'/);
   assert.doesNotMatch(route, /custom_fields:/);
 });
 
