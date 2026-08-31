@@ -49,6 +49,21 @@ test('las altas y cambios de asiento se ejecutan dentro de transacciones', () =>
   assert.match(source.slice(update, cancel), /db\.runTransaction/);
 });
 
+test('la taquilla registra de uno a diez lugares como una compra atómica', () => {
+  const start = source.indexOf("app.post('/congreso/admin/registros'");
+  const update = source.indexOf("app.put('/congreso/admin/registros/:id'", start);
+  assert.ok(start >= 0 && update > start);
+  const route = source.slice(start, update);
+
+  assert.match(route, /normalizarAsientosCongreso\(req\.body\?\.asientos, req\.body\?\.asiento\)/);
+  assert.match(route, /asientos\.length > 10/);
+  assert.match(route, /Promise\.all\(asientoRefs\.map\(\(ref\) => tx\.get\(ref\)\)\)/);
+  assert.match(route, /cantidadBoletos: asientos\.length/);
+  assert.match(route, /asientosGrupo: asientos/);
+  assert.match(route, /compraGrupoId/);
+  assert.match(route, /registrosCreados/);
+});
+
 test('los reintentos de Stripe respetan ediciones y cancelaciones administrativas', () => {
   assert.match(source, /registro = \{ \.\.\.registro, \.\.\.datosAnteriores \}/);
   assert.match(source, /datosAnteriores\.estadoRegistro === 'cancelado'/);

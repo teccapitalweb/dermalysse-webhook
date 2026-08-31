@@ -1197,76 +1197,105 @@ app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin,
     const ficha = fichaCongresoSeleccionada(req.body?.fichaId, fichas);
     if (!ficha) return res.status(400).json({ error: 'Selecciona una ficha válida' });
 
-    const datos = datosRegistroTaquilla(req.body || {}, ficha);
-    if (!datos.nombre) return res.status(400).json({ error: 'Escribe el nombre del asistente' });
-    if (!datos.asiento) return res.status(400).json({ error: 'Selecciona un asiento' });
-    if (req.body?.enviarConfirmacion && !datos.correo) {
+    const asientos = normalizarAsientosCongreso(req.body?.asientos, req.body?.asiento);
+    if (!asientos.length) return res.status(400).json({ error: 'Selecciona al menos un lugar' });
+    if (asientos.length > 10) return res.status(400).json({ error: 'Puedes registrar hasta 10 lugares por compra' });
+
+    const datosBase = datosRegistroTaquilla({ ...(req.body || {}), asiento: asientos[0] }, ficha);
+    if (!datosBase.nombre) return res.status(400).json({ error: 'Escribe el nombre del asistente' });
+    if (req.body?.enviarConfirmacion && !datosBase.correo) {
       return res.status(400).json({ error: 'Agrega un correo para enviar la confirmación' });
     }
 
     await asegurarAsientos();
-    const registroId = 'manual-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex');
+    const compraGrupoId = 'manual-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex');
     const ahora = new Date().toISOString();
-    const registroRef = db.collection('congresoRegistrations').doc(registroId);
-    const asientoRef = db.collection('congresoAsientos').doc(datos.asiento);
-    const registro = {
-      ...datos,
-      fechaCompra: ahora,
-      origen: 'taquilla',
-      estadoRegistro: 'activo',
-      creadoPor: req.firebaseUser.email || req.firebaseUser.uid,
-      stripeSessionId: null,
-      stripeCustomerId: null,
-      notificacionCompra: req.body?.enviarConfirmacion ? 'pendiente' : 'no_solicitada',
-      notificacionEnviadaEn: null
-    };
-
-    await db.runTransaction(async (tx) => {
-      const asientoSnap = await tx.get(asientoRef);
-      if (!asientoSnap.exists) throw new Error('SEAT_NOT_FOUND');
-      const asiento = asientoSnap.data();
-      if (asiento.zona !== ficha.zona) throw new Error('SEAT_WRONG_ZONE');
-      if (estadoEfectivo(asiento) !== 'libre') throw new Error('SEAT_TAKEN');
-
-      tx.set(registroRef, registro);
-      tx.set(asientoRef, {
-        estado: 'vendido',
-        holdUntil: null,
-        sessionId: null,
-        registroId,
-        nombre: datos.nombre,
-        actualizadoEn: ahora
-      }, { merge: true });
+    const montoIngresado = Number(req.body?.monto);
+    const tieneMonto = req.body?.monto !== '' && req.body?.monto !== null && req.body?.monto !== undefined;
+    const montoTotalCompra = tieneMonto && Number.isFinite(montoIngresado) && montoIngresado >= 0
+      ? montoIngresado
+      : ficha.precio * asientos.length;
+    const montoPorLugar = montoTotalCompra / asientos.length;
+    const asientoRefs = asientos.map((asiento) => db.collection('congresoAsientos').doc(asiento));
+    const registros = asientos.map((asiento) => {
+      const registroId = asientos.length === 1 ? compraGrupoId : `${compraGrupoId}_${asiento.toLowerCase()}`;
+      return {
+        registroRef: db.collection('congresoRegistrations').doc(registroId),
+        registro: {
+          ...datosBase,
+          asiento,
+          monto: montoPorLugar,
+          montoTotalCompra,
+          cantidadBoletos: asientos.length,
+          asientosGrupo: asientos,
+          compraGrupoId,
+          fechaCompra: ahora,
+          origen: 'taquilla',
+          estadoRegistro: 'activo',
+          creadoPor: req.firebaseUser.email || req.firebaseUser.uid,
+          stripeSessionId: null,
+          stripeCustomerId: null,
+          notificacionCompra: req.body?.enviarConfirmacion ? 'pendiente' : 'no_solicitada',
+          notificacionEnviadaEn: null
+        }
+      };
     });
 
-    if (req.body?.enviarConfirmacion && datos.correo) {
+    await db.runTransaction(async (tx) => {
+      const asientoSnaps = await Promise.all(asientoRefs.map((ref) => tx.get(ref)));
+      asientoSnaps.forEach((asientoSnap) => {
+        if (!asientoSnap.exists) throw new Error('SEAT_NOT_FOUND');
+        const asiento = asientoSnap.data();
+        if (asiento.zona !== ficha.zona) throw new Error('SEAT_WRONG_ZONE');
+        if (estadoEfectivo(asiento) !== 'libre') throw new Error('SEAT_TAKEN');
+      });
+
+      registros.forEach(({ registroRef, registro }, index) => {
+        tx.set(registroRef, registro);
+        tx.set(asientoRefs[index], {
+          estado: 'vendido',
+          holdUntil: null,
+          sessionId: null,
+          registroId: registroRef.id,
+          nombre: datosBase.nombre,
+          actualizadoEn: ahora
+        }, { merge: true });
+      });
+    });
+
+    if (req.body?.enviarConfirmacion && datosBase.correo) {
       const notificacion = await sendEmail(
-        datos.correo,
-        '¡Tu ficha al congreso está confirmada!',
+        datosBase.correo,
+        asientos.length === 1 ? '¡Tu ficha al congreso está confirmada!' : '¡Tus lugares al congreso están confirmados!',
         congresoEmailTemplate('¡Gracias por tu compra!',
-          '<p style="margin:0 0 4px;">Tu ficha ha sido confirmada. Aquí tienes el resumen de tu registro:</p>' +
+          '<p style="margin:0 0 4px;">Tu compra ha sido confirmada. Aquí tienes el resumen de tu registro:</p>' +
           congresoDatosCard([
             { label: 'Ficha', valor: ficha.nombre },
-            { label: 'Asiento', valor: datos.asiento },
-            { label: 'Monto registrado', valor: '$' + datos.monto.toLocaleString('es-MX') + ' MXN' }
+            { label: asientos.length === 1 ? 'Lugar' : 'Lugares', valor: asientos.join(', ') },
+            { label: 'Cantidad', valor: asientos.length },
+            { label: 'Monto registrado', valor: '$' + montoTotalCompra.toLocaleString('es-MX') + ' MXN' }
           ]),
           { incluirBeneficios: true }
         ),
-        { idempotencyKey: 'congreso-manual-' + registroId }
+        { idempotencyKey: 'congreso-manual-' + compraGrupoId }
       );
-      registro.notificacionCompra = notificacion.reason;
-      registro.notificacionEnviadaEn = notificacion.sent ? new Date().toISOString() : null;
-      await registroRef.set({
-        notificacionCompra: registro.notificacionCompra,
-        notificacionEnviadaEn: registro.notificacionEnviadaEn
-      }, { merge: true });
+      const notificacionEnviadaEn = notificacion.sent ? new Date().toISOString() : null;
+      await Promise.all(registros.map(({ registroRef, registro }) => {
+        registro.notificacionCompra = notificacion.reason;
+        registro.notificacionEnviadaEn = notificacionEnviadaEn;
+        return registroRef.set({
+          notificacionCompra: registro.notificacionCompra,
+          notificacionEnviadaEn
+        }, { merge: true });
+      }));
     }
 
-    res.status(201).json({ registro: { id: registroId, ...registro } });
+    const registrosCreados = registros.map(({ registroRef, registro }) => ({ id: registroRef.id, ...registro }));
+    res.status(201).json({ registro: registrosCreados[0], registros: registrosCreados });
   } catch (err) {
     if (err.message === 'SEAT_NOT_FOUND') return res.status(400).json({ error: 'Ese asiento no existe' });
     if (err.message === 'SEAT_WRONG_ZONE') return res.status(400).json({ error: 'El asiento no corresponde a la ficha seleccionada' });
-    if (err.message === 'SEAT_TAKEN') return res.status(409).json({ error: 'Ese asiento ya no está disponible' });
+    if (err.message === 'SEAT_TAKEN') return res.status(409).json({ error: 'Uno de los lugares ya no está disponible; no se registró ninguna venta parcial' });
     console.error('POST registro congreso admin error:', err);
     res.status(500).json({ error: 'No se pudo registrar al asistente' });
   }
