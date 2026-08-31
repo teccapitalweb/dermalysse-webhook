@@ -11,6 +11,8 @@ Servicio Express para webhooks y operaciones de Stripe, consulta de membresía y
 - Autoriza vistas previas gratuitas y clases premium de Bunny Stream.
 - Acredita el avance desde eventos reales del reproductor, sin botones manuales.
 - Emite certificados con folio consultable en el backend.
+- Separa al comprador del congreso de cada asistente y crea un registro por asiento.
+- Envía enlaces privados para guardar avances, completar acompañantes o compartir un solo lugar.
 
 ## Configuración
 
@@ -24,6 +26,8 @@ Variables principales:
 - `BUNNY_STREAM_LIBRARY_ID`
 - `BUNNY_STREAM_TOKEN_KEY`, `BUNNY_STREAM_TOKEN_AUTH_KEY` o la clave compatible configurada para la biblioteca
 - `BUNNY_STREAM_TOKEN_TTL_SECONDS`
+- `CONGRESS_PUBLIC_SITE_URL`
+- `CONGRESS_ATTENDEE_LINK_TTL_DAYS`
 
 Las variables de Resend son `RESEND_API_KEY`, `RESEND_FROM_EMAIL` y, opcionalmente,
 `RESEND_REPLY_TO`. Si no existen, las notificaciones por correo se omiten sin afectar pagos ni reproducción.
@@ -38,6 +42,8 @@ npm start
 ## Webhook de Stripe
 
 Configura en Stripe el endpoint desplegado terminado en `/webhook` y guarda su signing secret únicamente como `STRIPE_WEBHOOK_SECRET` en Railway.
+
+Stripe Checkout solicita solamente nombre individual, correo y teléfono del comprador. Empresa, consultorio y perfiles profesionales son opcionales y se capturan después del pago. Los enlaces enviados por correo usan tokens aleatorios; Firestore conserva únicamente su hash y la fecha de expiración.
 
 ## Reproducción Bunny
 

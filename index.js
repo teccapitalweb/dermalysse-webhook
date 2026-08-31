@@ -15,6 +15,16 @@ const {
   perfilQr,
   perfilPublico
 } = require('./congreso-qr');
+const {
+  crearTokenGestion,
+  hashTokenGestion,
+  fechaExpiracionGestion,
+  limpiarAsistente,
+  estadoDatosAsistente,
+  datosExtraAsistente,
+  enlaceGestion,
+  etiquetaPendiente
+} = require('./congreso-acreditacion');
 
 // ═══ FIREBASE ADMIN ═══
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
@@ -45,6 +55,8 @@ const RESEND_API_KEY = String(process.env.RESEND_API_KEY || '').trim();
 const RESEND_FROM_EMAIL = String(process.env.RESEND_FROM_EMAIL || '').trim();
 const RESEND_REPLY_TO = String(process.env.RESEND_REPLY_TO || ADMIN_EMAIL || '').trim();
 const EMAIL_NOTIFICATIONS_CONFIGURED = Boolean(RESEND_API_KEY && RESEND_FROM_EMAIL);
+const CONGRESS_PUBLIC_SITE_URL = String(process.env.CONGRESS_PUBLIC_SITE_URL || 'https://congreso.dermalyssemx.com').trim().replace(/\/+$/, '');
+const CONGRESS_ATTENDEE_LINK_TTL_DAYS = Math.min(365, Math.max(1, Number(process.env.CONGRESS_ATTENDEE_LINK_TTL_DAYS) || 180));
 
 async function sendEmail(to, subject, html, options = {}) {
   if (!to) return { sent: false, reason: 'sin_correo' };
@@ -95,6 +107,9 @@ async function sendEmail(to, subject, html, options = {}) {
 function congresoEmailTemplate(title, body, opts) {
   opts = opts || {};
   const incluirBeneficios = opts.incluirBeneficios === true;
+  const accionPrincipal = opts.accionUrl ? `
+        <a href="${opts.accionUrl}" style="display:block;margin:0 auto 14px;max-width:360px;background:#087f78;color:#ffffff;padding:15px 25px;border-radius:8px;text-decoration:none;font-weight:800;font-size:15px;">${opts.accionTexto || 'Completar datos de asistentes'}</a>
+        <p style="margin:0 auto 18px;max-width:420px;color:#61817d;font-size:12px;line-height:1.55;">Puedes guardar un avance y regresar más tarde desde este mismo enlace.</p>` : '';
 
   const membresiaBoton = incluirBeneficios ? `
         <a href="https://club.dermalyssemx.com/?auth=register" style="display:block;margin:10px auto 0;max-width:320px;border:2px solid #087f78;background:#ffffff;color:#087f78;padding:11px 25px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Activar mi membresía</a>` : '';
@@ -125,6 +140,7 @@ function congresoEmailTemplate(title, body, opts) {
       <h2 style="color:#062d2b;margin:0 0 20px;font-size:21px;line-height:1.2;white-space:nowrap;">${title}</h2>
       <div style="color:#365653;font-size:15px;line-height:1.75;">${body}</div>
       <div style="text-align:center;margin-top:30px;">
+        ${accionPrincipal}
         <a href="https://congreso.dermalyssemx.com/#pases" style="display:block;margin:0 auto;max-width:320px;background:#087f78;color:#ffffff;padding:13px 25px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Ver información del congreso</a>
         <a href="https://congreso.dermalyssemx.com/#programa" style="display:block;margin:10px auto 0;max-width:320px;background:#21d4bd;color:#062d2b;padding:13px 25px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Ver itinerario</a>
         ${membresiaBoton}
@@ -403,15 +419,21 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           const montoTotalCompra = session.amount_total ? session.amount_total / 100 : null;
           const montoPorLugar = montoTotalCompra === null ? null : montoTotalCompra / cantidadBoletos;
           const registrosActivos = [];
+          const registrosIds = [];
+          const comprador = datosCompradorStripe(session, md);
+          const tokenGestion = crearTokenGestion();
+          const ahoraCompra = new Date().toISOString();
 
           // Cada lugar se guarda como registro independiente. Así una compra de
           // grupo puede recibir un QR por asistente y el panel puede cancelar o
           // editar un lugar sin afectar los demás.
-          for (const asientoCompra of asientosParaRegistrar) {
+          for (const [indice, asientoCompra] of asientosParaRegistrar.entries()) {
+            const esComprador = cantidadBoletos === 1 || indice === 0;
+            const datosAsistente = esComprador ? comprador : limpiarAsistente({ asiento: asientoCompra });
             let registro = {
-              nombre: session.customer_details?.name || md.nombre || '',
-              correo: session.customer_details?.email || md.correo || '',
-              telefono: session.customer_details?.phone || md.telefono || '',
+              nombre: datosAsistente.nombre,
+              correo: datosAsistente.correo,
+              telefono: datosAsistente.telefono,
               fichaId: md.ficha || '',
               ficha: md.fichaNombre || md.ficha || '',
               asiento: asientoCompra,
@@ -421,10 +443,13 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               asientosGrupo: asientosCompra,
               compraGrupoId: session.id,
               metodoPago: 'stripe',
-              fechaCompra: new Date().toISOString(),
+              fechaCompra: ahoraCompra,
               stripeSessionId: session.id,
               stripeCustomerId: customerId || null,
-              extra
+              extra: esComprador ? extra : {},
+              esComprador,
+              datosAsistenteEstado: estadoDatosAsistente(datosAsistente),
+              estadoRegistro: 'activo'
             };
             // Una venta individual conserva el ID histórico. En grupo, el ID
             // combina sesión + lugar para mantener idempotencia por boleto.
@@ -432,6 +457,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               ? session.id
               : `${session.id}_${asientoCompra.toLowerCase()}`;
             const regRef = db.collection('congresoRegistrations').doc(registroId);
+            registrosIds.push(registroId);
             const eliminadoRef = db.collection('congresoDeletedRegistrations').doc(registroId);
             const eliminadoSnap = await eliminadoRef.get();
             if (eliminadoSnap.exists) {
@@ -463,7 +489,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
                 holdUntil: null,
                 sessionId: session.id,
                 registroId: regRef.id,
-                nombre: registro.nombre || registro.correo || '',
+                nombre: registro.nombre || etiquetaPendiente(registro.asiento),
                 actualizadoEn: new Date().toISOString()
               }, { merge: true }).catch((e) => console.error('Error marcando asiento vendido:', e));
             }
@@ -475,6 +501,23 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           const { regRef, registro, datosAnteriores } = principal;
           const etiquetaLugares = asientosCompra.length > 1 ? 'Lugares' : 'Lugar';
           const valorLugares = asientosCompra.join(', ') || registro.asiento || null;
+          const debeEnviarGestion = Boolean(registro.correo && !datosAnteriores.notificacionEnviadaEn);
+          await guardarCompraCongreso({
+            compraGrupoId: session.id,
+            comprador,
+            fichaId: md.ficha || '',
+            ficha: md.fichaNombre || md.ficha || '',
+            asientos: asientosCompra,
+            registrosIds,
+            cantidadBoletos,
+            montoTotalCompra,
+            origen: 'stripe',
+            stripeSessionId: session.id,
+            token: tokenGestion,
+            ahora: ahoraCompra,
+            forzarToken: debeEnviarGestion
+          });
+          const gestionUrl = enlaceGestion(CONGRESS_PUBLIC_SITE_URL, tokenGestion);
 
           // Una compra de grupo genera un solo correo de confirmación.
           if (registro.correo && !datosAnteriores.notificacionEnviadaEn) {
@@ -486,17 +529,19 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
                   { label: etiquetaLugares, valor: valorLugares },
                   { label: 'Cantidad', valor: cantidadBoletos },
                   { label: 'Monto pagado', valor: montoTotalCompra ? ('$' + montoTotalCompra.toLocaleString('es-MX') + ' MXN') : null }
-                ]),
-                { incluirBeneficios: true }
+                ]) +
+                '<p style="margin-top:18px;">El primer lugar ya tiene los datos del comprador. Completa o comparte los demás ahora, o regresa con calma desde este mismo enlace.</p>',
+                { incluirBeneficios: true, accionUrl: gestionUrl, accionTexto: cantidadBoletos > 1 ? 'Registrar a mis acompañantes' : 'Revisar y completar mis datos' }
               ),
               { idempotencyKey: 'congreso-comprador-' + session.id }
             );
-            await regRef.set({
+            const notificacionEnviadaEn = notificacion.sent ? new Date().toISOString() : null;
+            await Promise.all(registrosActivos.map(({ regRef: ref }) => ref.set({
               notificacionCompra: notificacion.reason,
-              notificacionEnviadaEn: notificacion.sent ? new Date().toISOString() : null
-            }, { merge: true });
+              notificacionEnviadaEn
+            }, { merge: true })));
           } else if (!registro.correo) {
-            await regRef.set({ notificacionCompra: 'sin_correo', notificacionEnviadaEn: null }, { merge: true });
+            await Promise.all(registrosActivos.map(({ regRef: ref }) => ref.set({ notificacionCompra: 'sin_correo', notificacionEnviadaEn: null }, { merge: true })));
           }
           setTimeout(function(){
             sendEmail(
@@ -984,8 +1029,9 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
       4. La sesión de Stripe expira a los 30 min (expires_at): si no paga,
          checkout.session.expired libera el asiento; el hold vence solo como
          red de seguridad extra.
-      Los datos personales se piden DENTRO de Stripe: nombre y correo nativos,
-      teléfono con phone_number_collection, networking en custom_fields (máx 3).
+      Stripe solicita únicamente los datos esenciales del comprador: nombre,
+      correo y teléfono. Empresa y perfiles profesionales se completan después
+      desde el enlace privado enviado por correo.
       El registro se crea en el webhook checkout.session.completed.
     */
     const { ficha, asiento, asientos: asientosSolicitados, successUrl, cancelUrl } = req.body;
@@ -1056,32 +1102,22 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
           quantity: asientos.length
         }],
         mode: 'payment',
+        customer_creation: 'always',
         // 30 min es el mínimo que permite Stripe; si no paga, el asiento se libera.
         expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
         // Teléfono lo pide Stripe de forma nativa:
         phone_number_collection: { enabled: true },
-        // Datos de networking (3 campos = máximo permitido por Stripe).
+        // Nombre individual obligatorio; el nombre comercial se deja para el
+        // formulario posterior porque es opcional.
+        name_collection: {
+          individual: { enabled: true, optional: false }
+        },
         locale: 'es-419',
-        custom_fields: [
-          {
-            key: 'empresa',
-            label: { type: 'custom', custom: 'Empresa o lugar donde trabajas' },
-            type: 'text',
-            optional: false
-          },
-          {
-            key: 'linkedin_web',
-            label: { type: 'custom', custom: 'LinkedIn o sitio web (opcional)' },
-            type: 'text',
-            optional: true
-          },
-          {
-            key: 'instagram',
-            label: { type: 'custom', custom: 'Instagram (opcional)' },
-            type: 'text',
-            optional: true
+        custom_text: {
+          submit: {
+            message: 'Después del pago recibirás un enlace para completar o compartir los datos de cada asistente.'
           }
-        ],
+        },
         success_url: successUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=success',
         cancel_url: cancelUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=canceled',
         metadata: {
@@ -1183,6 +1219,277 @@ function datosRegistroTaquilla(body, ficha) {
   };
 }
 
+function datosCompradorStripe(session, metadata = {}) {
+  const individualName = session.collected_information?.individual_name;
+  const nombreRecolectado = typeof individualName === 'string'
+    ? individualName
+    : individualName?.value || individualName?.name || '';
+  return limpiarAsistente({
+    nombre: nombreRecolectado || session.customer_details?.name || metadata.nombre || '',
+    correo: session.customer_details?.email || metadata.correo || '',
+    telefono: session.customer_details?.phone || metadata.telefono || ''
+  });
+}
+
+function datosPublicosRegistro(registroId, registro) {
+  const extra = registro.extra && typeof registro.extra === 'object' ? registro.extra : {};
+  return {
+    registroId,
+    asiento: registro.asiento || '',
+    nombre: registro.nombre || '',
+    correo: registro.correo || '',
+    telefono: registro.telefono || '',
+    empresa: extra.Empresa || '',
+    linkedinWeb: extra['LinkedIn/Web'] || '',
+    instagram: extra.Instagram || '',
+    consentimientoPublicacion: registro.consentimientoPublicacion === true,
+    datosEstado: registro.datosAsistenteEstado || estadoDatosAsistente(registro),
+    esComprador: registro.esComprador === true,
+    qrAsignado: Boolean(registro.qrCodigo)
+  };
+}
+
+function enlaceGestionVigente(data, campo = 'gestionTokenExpiraEn') {
+  const expira = Date.parse(data?.[campo] || '');
+  return Number.isFinite(expira) && expira > Date.now();
+}
+
+async function resolverGestionAcompanantes(token) {
+  const normalizado = String(token || '').trim();
+  if (!/^[A-Za-z0-9_-]{40,200}$/.test(normalizado)) return null;
+  const tokenHash = hashTokenGestion(normalizado);
+
+  const compraQuery = await db.collection('congresoPurchases')
+    .where('gestionTokenHash', '==', tokenHash)
+    .limit(1)
+    .get();
+  if (!compraQuery.empty) {
+    const compraDoc = compraQuery.docs[0];
+    const compra = compraDoc.data();
+    if (!enlaceGestionVigente(compra)) return { vencido: true };
+    const registrosSnap = await db.collection('congresoRegistrations')
+      .where('compraGrupoId', '==', compraDoc.id)
+      .get();
+    const porId = new Map(registrosSnap.docs.map((doc) => [doc.id, doc]));
+    const orden = Array.isArray(compra.registrosIds) && compra.registrosIds.length
+      ? compra.registrosIds
+      : registrosSnap.docs.map((doc) => doc.id);
+    const registros = orden.map((id) => porId.get(id)).filter(Boolean);
+    return { tipo: 'compra', compraRef: compraDoc.ref, compra, registros };
+  }
+
+  const invitacionQuery = await db.collection('congresoRegistrations')
+    .where('invitacionTokenHash', '==', tokenHash)
+    .limit(1)
+    .get();
+  if (invitacionQuery.empty) return null;
+  const registroDoc = invitacionQuery.docs[0];
+  const registro = registroDoc.data();
+  if (!enlaceGestionVigente(registro, 'invitacionTokenExpiraEn')) return { vencido: true };
+  const compraRef = db.collection('congresoPurchases').doc(registro.compraGrupoId);
+  const compraSnap = await compraRef.get();
+  return {
+    tipo: 'asiento',
+    compraRef,
+    compra: compraSnap.exists ? compraSnap.data() : {},
+    registros: [registroDoc]
+  };
+}
+
+function respuestaGestionAcompanantes(resuelta) {
+  const compra = resuelta.compra || {};
+  const comprador = compra.comprador && typeof compra.comprador === 'object' ? compra.comprador : {};
+  return {
+    alcance: resuelta.tipo,
+    compra: {
+      ficha: compra.ficha || '',
+      fichaId: compra.fichaId || '',
+      asientos: Array.isArray(compra.asientos) ? compra.asientos : [],
+      cantidad: Number(compra.cantidadBoletos) || resuelta.registros.length,
+      comprador: resuelta.tipo === 'compra' ? {
+        nombre: comprador.nombre || '',
+        correo: comprador.correo || '',
+        telefono: comprador.telefono || ''
+      } : { nombre: '', correo: '', telefono: '' }
+    },
+    asistentes: resuelta.registros
+      .filter((doc) => doc.data().estadoRegistro !== 'cancelado')
+      .map((doc) => datosPublicosRegistro(doc.id, doc.data()))
+  };
+}
+
+async function guardarCompraCongreso({
+  compraGrupoId,
+  comprador,
+  fichaId,
+  ficha,
+  asientos,
+  registrosIds,
+  cantidadBoletos,
+  montoTotalCompra,
+  origen,
+  stripeSessionId,
+  token,
+  ahora,
+  forzarToken = false
+}) {
+  const compraRef = db.collection('congresoPurchases').doc(compraGrupoId);
+  const compraAnterior = await compraRef.get();
+  const conservaEnlace = compraAnterior.exists && compraAnterior.data().gestionTokenHash;
+  await compraRef.set({
+    compraGrupoId,
+    comprador: {
+      nombre: comprador.nombre || '',
+      correo: comprador.correo || '',
+      telefono: comprador.telefono || ''
+    },
+    fichaId: fichaId || '',
+    ficha: ficha || '',
+    asientos,
+    registrosIds,
+    cantidadBoletos,
+    montoTotalCompra: montoTotalCompra == null ? null : montoTotalCompra,
+    origen,
+    stripeSessionId: stripeSessionId || null,
+    estadoDatos: cantidadBoletos === 1 ? estadoDatosAsistente(comprador) : 'pendiente',
+    ...(conservaEnlace && !forzarToken ? {} : {
+      gestionTokenHash: hashTokenGestion(token),
+      gestionTokenExpiraEn: fechaExpiracionGestion(CONGRESS_ATTENDEE_LINK_TTL_DAYS)
+    }),
+    creadoEn: ahora,
+    actualizadoEn: ahora
+  }, { merge: true });
+  return compraRef;
+}
+
+app.get('/congreso/acompanantes/:token', async (req, res) => {
+  try {
+    const resuelta = await resolverGestionAcompanantes(req.params.token);
+    res.set('Cache-Control', 'no-store');
+    if (!resuelta) return res.status(404).json({ error: 'El enlace no existe o fue reemplazado' });
+    if (resuelta.vencido) return res.status(410).json({ error: 'Este enlace ya venció. Solicita uno nuevo en recepción.' });
+    res.json(respuestaGestionAcompanantes(resuelta));
+  } catch (err) {
+    console.error('GET gestión de acompañantes error:', err);
+    res.status(500).json({ error: 'No se pudieron cargar los asistentes' });
+  }
+});
+
+app.put('/congreso/acompanantes/:token', async (req, res) => {
+  try {
+    const resuelta = await resolverGestionAcompanantes(req.params.token);
+    if (!resuelta) return res.status(404).json({ error: 'El enlace no existe o fue reemplazado' });
+    if (resuelta.vencido) return res.status(410).json({ error: 'Este enlace ya venció. Solicita uno nuevo en recepción.' });
+
+    const entradas = Array.isArray(req.body?.asistentes) ? req.body.asistentes.slice(0, 10) : [];
+    if (!entradas.length) return res.status(400).json({ error: 'No se recibieron datos para guardar' });
+    const permitidos = new Map(resuelta.registros.map((doc) => [doc.id, doc]));
+    const actualizaciones = [];
+    for (const entrada of entradas) {
+      const asistente = limpiarAsistente(entrada);
+      const doc = permitidos.get(asistente.registroId);
+      if (!doc) return res.status(403).json({ error: 'Uno de los asistentes no pertenece a este enlace' });
+      const estado = estadoDatosAsistente(asistente);
+      if (req.body?.finalizar === true && estado !== 'completo') {
+        return res.status(400).json({ error: `Completa nombre, correo y teléfono del asiento ${doc.data().asiento || asistente.asiento}` });
+      }
+      actualizaciones.push({ doc, asistente, estado });
+    }
+
+    const ahora = new Date().toISOString();
+    await db.runTransaction(async (tx) => {
+      const snaps = await Promise.all(actualizaciones.map(({ doc }) => tx.get(doc.ref)));
+      snaps.forEach((snap) => {
+        if (!snap.exists || snap.data().estadoRegistro === 'cancelado') throw new Error('REG_NOT_FOUND');
+      });
+      actualizaciones.forEach(({ doc, asistente, estado }, index) => {
+        const anterior = snaps[index].data();
+        const extraAnterior = anterior.extra && typeof anterior.extra === 'object' ? anterior.extra : {};
+        const extraNuevo = datosExtraAsistente(asistente, extraAnterior.Notas || '');
+        tx.set(doc.ref, {
+          nombre: asistente.nombre,
+          correo: asistente.correo,
+          telefono: asistente.telefono,
+          extra: { ...extraAnterior, ...extraNuevo },
+          consentimientoPublicacion: asistente.consentimientoPublicacion,
+          datosAsistenteEstado: estado,
+          datosActualizadosEn: ahora,
+          datosActualizadosPor: resuelta.tipo === 'compra' ? 'comprador' : 'invitado'
+        }, { merge: true });
+        const asiento = anterior.asiento;
+        if (asiento) {
+          tx.set(db.collection('congresoAsientos').doc(asiento), {
+            nombre: asistente.nombre || etiquetaPendiente(asiento),
+            actualizadoEn: ahora
+          }, { merge: true });
+        }
+      });
+    });
+
+    const registrosActualizados = await db.collection('congresoRegistrations')
+      .where('compraGrupoId', '==', resuelta.compraRef.id)
+      .get();
+    const activos = registrosActualizados.docs.filter((doc) => doc.data().estadoRegistro !== 'cancelado');
+    const estadoCompra = activos.length && activos.every((doc) => (doc.data().datosAsistenteEstado || estadoDatosAsistente(doc.data())) === 'completo')
+      ? 'completo'
+      : 'pendiente';
+    await resuelta.compraRef.set({ estadoDatos: estadoCompra, actualizadoEn: ahora }, { merge: true });
+
+    const recargada = await resolverGestionAcompanantes(req.params.token);
+    res.json({ ...respuestaGestionAcompanantes(recargada), guardado: true, estadoDatos: estadoCompra });
+  } catch (err) {
+    if (err.message === 'REG_NOT_FOUND') return res.status(404).json({ error: 'Uno de los asistentes ya no está activo' });
+    console.error('PUT gestión de acompañantes error:', err);
+    res.status(500).json({ error: 'No se pudieron guardar los datos' });
+  }
+});
+
+app.post('/congreso/acompanantes/:token/invitar', async (req, res) => {
+  try {
+    const resuelta = await resolverGestionAcompanantes(req.params.token);
+    if (!resuelta) return res.status(404).json({ error: 'Este enlace no puede crear invitaciones' });
+    if (resuelta.vencido) return res.status(410).json({ error: 'Este enlace ya venció' });
+    if (resuelta.tipo !== 'compra') return res.status(403).json({ error: 'Este enlace solo permite completar un asiento' });
+    const registroId = textoFormulario(req.body?.registroId, 180);
+    const registroDoc = resuelta.registros.find((doc) => doc.id === registroId);
+    if (!registroDoc || registroDoc.data().estadoRegistro === 'cancelado') {
+      return res.status(404).json({ error: 'No se encontró ese asiento en la compra' });
+    }
+
+    const correo = textoFormulario(req.body?.correo || registroDoc.data().correo, 180).toLowerCase();
+    const tokenInvitado = crearTokenGestion();
+    const ahora = new Date().toISOString();
+    const expiraEn = fechaExpiracionGestion(CONGRESS_ATTENDEE_LINK_TTL_DAYS);
+    await registroDoc.ref.set({
+      correo,
+      invitacionTokenHash: hashTokenGestion(tokenInvitado),
+      invitacionTokenExpiraEn: expiraEn,
+      invitacionCreadaEn: ahora
+    }, { merge: true });
+    const url = enlaceGestion(CONGRESS_PUBLIC_SITE_URL, tokenInvitado);
+    let envio = { sent: false, reason: 'sin_correo' };
+    if (correo) {
+      envio = await sendEmail(
+        correo,
+        `Completa tus datos para el asiento ${registroDoc.data().asiento || ''}`,
+        congresoEmailTemplate('Tu lugar está reservado',
+          '<p>El comprador te asignó un lugar para BIO SKIN Congress.</p>' +
+          congresoDatosCard([
+            { label: 'Ficha', valor: resuelta.compra.ficha || registroDoc.data().ficha },
+            { label: 'Asiento', valor: registroDoc.data().asiento }
+          ]) +
+          '<p style="margin-top:18px;">Completa nombre, correo y teléfono. Empresa y redes profesionales son opcionales.</p>',
+          { accionUrl: url, accionTexto: 'Completar mis datos' }),
+        { idempotencyKey: 'congreso-invitacion-' + registroId + '-' + Date.now() }
+      );
+    }
+    res.json({ enlace: url, correo, envio: envio.reason });
+  } catch (err) {
+    console.error('POST invitación de acompañante error:', err);
+    res.status(500).json({ error: 'No se pudo crear la invitación' });
+  }
+});
+
 // La taquilla del panel usa estas rutas para leer y modificar la MISMA base
 // que Stripe. Ningún dato sensible queda expuesto en el mapa público.
 app.get('/congreso/admin/asientos', requireFirebaseUser, requireFirebaseAdmin, async (req, res) => {
@@ -1213,7 +1520,7 @@ app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin,
     if (asientos.length > 10) return res.status(400).json({ error: 'Puedes registrar hasta 10 lugares por compra' });
 
     const datosBase = datosRegistroTaquilla({ ...(req.body || {}), asiento: asientos[0] }, ficha);
-    if (!datosBase.nombre) return res.status(400).json({ error: 'Escribe el nombre del asistente' });
+    if (!datosBase.nombre) return res.status(400).json({ error: 'Escribe el nombre del comprador' });
     if (req.body?.enviarConfirmacion && !datosBase.correo) {
       return res.status(400).json({ error: 'Agrega un correo para enviar la confirmación' });
     }
@@ -1228,12 +1535,43 @@ app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin,
       : ficha.precio * asientos.length;
     const montoPorLugar = montoTotalCompra / asientos.length;
     const asientoRefs = asientos.map((asiento) => db.collection('congresoAsientos').doc(asiento));
-    const registros = asientos.map((asiento) => {
+    const comprador = limpiarAsistente({
+      nombre: datosBase.nombre,
+      correo: datosBase.correo,
+      telefono: datosBase.telefono,
+      empresa: datosBase.extra?.Empresa,
+      linkedinWeb: datosBase.extra?.['LinkedIn/Web'],
+      instagram: datosBase.extra?.Instagram
+    });
+    const asistentesEnviados = new Map((Array.isArray(req.body?.asistentes) ? req.body.asistentes : [])
+      .map(limpiarAsistente)
+      .filter((asistente) => asientos.includes(asistente.asiento))
+      .map((asistente) => [asistente.asiento, asistente]));
+    const completarDespues = req.body?.completarDespues === true;
+    const registros = asientos.map((asiento, index) => {
       const registroId = asientos.length === 1 ? compraGrupoId : `${compraGrupoId}_${asiento.toLowerCase()}`;
+      const enviado = asistentesEnviados.get(asiento);
+      const esComprador = index === 0;
+      const asistente = esComprador
+        ? limpiarAsistente({
+            ...comprador,
+            ...(enviado || {}),
+            nombre: enviado?.nombre || comprador.nombre,
+            correo: enviado?.correo || comprador.correo,
+            telefono: enviado?.telefono || comprador.telefono,
+            asiento
+          })
+        : completarDespues && index > 0
+          ? limpiarAsistente({ asiento })
+          : limpiarAsistente({ ...(enviado || {}), asiento });
       return {
         registroRef: db.collection('congresoRegistrations').doc(registroId),
         registro: {
           ...datosBase,
+          nombre: asistente.nombre,
+          correo: asistente.correo,
+          telefono: asistente.telefono,
+          extra: datosExtraAsistente(asistente, index === 0 ? datosBase.extra?.Notas : ''),
           asiento,
           monto: montoPorLugar,
           montoTotalCompra,
@@ -1246,6 +1584,9 @@ app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin,
           creadoPor: req.firebaseUser.email || req.firebaseUser.uid,
           stripeSessionId: null,
           stripeCustomerId: null,
+          esComprador,
+          datosAsistenteEstado: estadoDatosAsistente(asistente),
+          consentimientoPublicacion: asistente.consentimientoPublicacion,
           notificacionCompra: req.body?.enviarConfirmacion ? 'pendiente' : 'no_solicitada',
           notificacionEnviadaEn: null
         }
@@ -1268,11 +1609,29 @@ app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin,
           holdUntil: null,
           sessionId: null,
           registroId: registroRef.id,
-          nombre: datosBase.nombre,
+          nombre: registro.nombre || etiquetaPendiente(registro.asiento),
           actualizadoEn: ahora
         }, { merge: true });
       });
     });
+
+    const tokenGestion = crearTokenGestion();
+    await guardarCompraCongreso({
+      compraGrupoId,
+      comprador,
+      fichaId: ficha.id,
+      ficha: ficha.nombre,
+      asientos,
+      registrosIds: registros.map(({ registroRef }) => registroRef.id),
+      cantidadBoletos: asientos.length,
+      montoTotalCompra,
+      origen: 'taquilla',
+      stripeSessionId: null,
+      token: tokenGestion,
+      ahora,
+      forzarToken: true
+    });
+    const gestionUrl = enlaceGestion(CONGRESS_PUBLIC_SITE_URL, tokenGestion);
 
     if (req.body?.enviarConfirmacion && datosBase.correo) {
       const notificacion = await sendEmail(
@@ -1285,8 +1644,9 @@ app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin,
             { label: asientos.length === 1 ? 'Lugar' : 'Lugares', valor: asientos.join(', ') },
             { label: 'Cantidad', valor: asientos.length },
             { label: 'Monto registrado', valor: '$' + montoTotalCompra.toLocaleString('es-MX') + ' MXN' }
-          ]),
-          { incluirBeneficios: true }
+          ]) +
+          '<p style="margin-top:18px;">Puedes completar cada asiento ahora o volver después desde el mismo enlace.</p>',
+          { incluirBeneficios: true, accionUrl: gestionUrl, accionTexto: asientos.length > 1 ? 'Registrar a mis acompañantes' : 'Revisar y completar mis datos' }
         ),
         { idempotencyKey: 'congreso-manual-' + compraGrupoId }
       );
@@ -1363,13 +1723,14 @@ app.put('/congreso/admin/registros/:id', requireFirebaseUser, requireFirebaseAdm
       }, { merge: true });
       tx.set(registroRef, {
         ...datos,
+        datosAsistenteEstado: estadoDatosAsistente(datos),
         estadoRegistro: 'activo',
         actualizadoEn: ahora,
         actualizadoPor: req.firebaseUser.email || req.firebaseUser.uid
       }, { merge: true });
     });
 
-    const actualizacion = { ...datos, estadoRegistro: 'activo', actualizadoEn: ahora };
+    const actualizacion = { ...datos, datosAsistenteEstado: estadoDatosAsistente(datos), estadoRegistro: 'activo', actualizadoEn: ahora };
     if (req.body?.enviarConfirmacion && datos.correo) {
       const notificacion = await sendEmail(
         datos.correo,
