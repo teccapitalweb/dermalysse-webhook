@@ -30,21 +30,24 @@ function booleano(value, fallback = false) {
 
 function perfilQr(body = {}, registro = {}) {
   const extra = registro.extra && typeof registro.extra === 'object' ? registro.extra : {};
+  const preferencias = registro.preferenciasTarjeta && typeof registro.preferenciasTarjeta === 'object'
+    ? registro.preferenciasTarjeta
+    : {};
   return {
     nombre: texto(body.nombre || registro.nombre, 160),
     cargo: texto(body.cargo || extra.Cargo, 120),
     empresa: texto(body.empresa || extra.Empresa, 180),
-    bio: texto(body.bio, 500),
+    bio: texto(body.bio || extra['Presentación'], 500),
     correo: texto(body.correo || registro.correo, 180).toLowerCase(),
     telefono: texto(body.telefono || registro.telefono, 60),
     sitioWeb: texto(body.sitioWeb || extra['Sitio web'], 300),
     linkedin: texto(body.linkedin || extra['LinkedIn/Web'], 300),
     instagram: texto(body.instagram || extra.Instagram, 120),
-    mostrarCorreo: booleano(body.mostrarCorreo, Boolean(body.correo || registro.correo)),
-    mostrarTelefono: booleano(body.mostrarTelefono, Boolean(body.telefono || registro.telefono)),
-    mostrarSitioWeb: booleano(body.mostrarSitioWeb, Boolean(body.sitioWeb || extra['Sitio web'])),
-    mostrarLinkedin: booleano(body.mostrarLinkedin, Boolean(body.linkedin || extra['LinkedIn/Web'])),
-    mostrarInstagram: booleano(body.mostrarInstagram, Boolean(body.instagram || extra.Instagram))
+    mostrarCorreo: booleano(body.mostrarCorreo, booleano(preferencias.mostrarCorreo, false)),
+    mostrarTelefono: booleano(body.mostrarTelefono, booleano(preferencias.mostrarTelefono, false)),
+    mostrarSitioWeb: booleano(body.mostrarSitioWeb, booleano(preferencias.mostrarSitioWeb, false)),
+    mostrarLinkedin: booleano(body.mostrarLinkedin, booleano(preferencias.mostrarLinkedin, false)),
+    mostrarInstagram: booleano(body.mostrarInstagram, booleano(preferencias.mostrarInstagram, false))
   };
 }
 

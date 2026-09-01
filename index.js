@@ -1248,11 +1248,23 @@ function datosRegistroTaquilla(body, ficha) {
     monto: tieneMonto && Number.isFinite(montoIngresado) && montoIngresado >= 0 ? montoIngresado : ficha.precio,
     metodoPago: textoFormulario(body.metodoPago || 'efectivo', 40),
     extra: {
+      Cargo: textoFormulario(body.cargo, 120),
       Empresa: textoFormulario(body.empresa, 180),
+      'Presentación': textoFormulario(body.bio, 500),
+      'Sitio web': textoFormulario(body.sitioWeb, 300),
       'LinkedIn/Web': textoFormulario(body.linkedinWeb, 240),
       Instagram: textoFormulario(body.instagram, 120),
       Notas: textoFormulario(body.notas, 600)
-    }
+    },
+    preferenciasTarjeta: {
+      mostrarCorreo: body.mostrarCorreo === true,
+      mostrarTelefono: body.mostrarTelefono === true,
+      mostrarSitioWeb: body.mostrarSitioWeb === true,
+      mostrarLinkedin: body.mostrarLinkedin === true,
+      mostrarInstagram: body.mostrarInstagram === true,
+      tarjetaVisible: body.tarjetaVisible === true
+    },
+    consentimientoPublicacion: body.consentimientoPublicacion === true
   };
 }
 
@@ -1276,9 +1288,18 @@ function datosPublicosRegistro(registroId, registro) {
     nombre: registro.nombre || '',
     correo: registro.correo || '',
     telefono: registro.telefono || '',
+    cargo: extra.Cargo || '',
     empresa: extra.Empresa || '',
+    bio: extra['Presentación'] || '',
+    sitioWeb: extra['Sitio web'] || '',
     linkedinWeb: extra['LinkedIn/Web'] || '',
     instagram: extra.Instagram || '',
+    mostrarCorreo: registro.preferenciasTarjeta?.mostrarCorreo === true,
+    mostrarTelefono: registro.preferenciasTarjeta?.mostrarTelefono === true,
+    mostrarSitioWeb: registro.preferenciasTarjeta?.mostrarSitioWeb === true,
+    mostrarLinkedin: registro.preferenciasTarjeta?.mostrarLinkedin === true,
+    mostrarInstagram: registro.preferenciasTarjeta?.mostrarInstagram === true,
+    tarjetaVisible: registro.preferenciasTarjeta?.tarjetaVisible === true,
     consentimientoPublicacion: registro.consentimientoPublicacion === true,
     datosEstado: registro.datosAsistenteEstado || estadoDatosAsistente(registro),
     esComprador: registro.esComprador === true,
@@ -1426,10 +1447,7 @@ app.put('/congreso/acompanantes/:token', async (req, res) => {
       const asistente = limpiarAsistente(entrada);
       const doc = permitidos.get(asistente.registroId);
       if (!doc) return res.status(403).json({ error: 'Uno de los asistentes no pertenece a este enlace' });
-      const estado = estadoDatosAsistente(asistente);
-      if (req.body?.finalizar === true && estado !== 'completo') {
-        return res.status(400).json({ error: `Completa nombre, correo y teléfono del asiento ${doc.data().asiento || asistente.asiento}` });
-      }
+      const estado = req.body?.finalizar === true ? 'completo' : estadoDatosAsistente(asistente);
       actualizaciones.push({ doc, asistente, estado });
     }
 
@@ -1448,6 +1466,14 @@ app.put('/congreso/acompanantes/:token', async (req, res) => {
           correo: asistente.correo,
           telefono: asistente.telefono,
           extra: { ...extraAnterior, ...extraNuevo },
+          preferenciasTarjeta: {
+            mostrarCorreo: asistente.mostrarCorreo,
+            mostrarTelefono: asistente.mostrarTelefono,
+            mostrarSitioWeb: asistente.mostrarSitioWeb,
+            mostrarLinkedin: asistente.mostrarLinkedin,
+            mostrarInstagram: asistente.mostrarInstagram,
+            tarjetaVisible: asistente.tarjetaVisible
+          },
           consentimientoPublicacion: asistente.consentimientoPublicacion,
           datosAsistenteEstado: estado,
           datosActualizadosEn: ahora,
@@ -1557,7 +1583,6 @@ app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin,
     if (asientos.length > 10) return res.status(400).json({ error: 'Puedes registrar hasta 10 lugares por compra' });
 
     const datosBase = datosRegistroTaquilla({ ...(req.body || {}), asiento: asientos[0] }, ficha);
-    if (!datosBase.nombre) return res.status(400).json({ error: 'Escribe el nombre del comprador' });
     if (req.body?.enviarConfirmacion && !datosBase.correo) {
       return res.status(400).json({ error: 'Agrega un correo para enviar la confirmación' });
     }
@@ -1576,9 +1601,14 @@ app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin,
       nombre: datosBase.nombre,
       correo: datosBase.correo,
       telefono: datosBase.telefono,
+      cargo: datosBase.extra?.Cargo,
       empresa: datosBase.extra?.Empresa,
+      bio: datosBase.extra?.['Presentación'],
+      sitioWeb: datosBase.extra?.['Sitio web'],
       linkedinWeb: datosBase.extra?.['LinkedIn/Web'],
-      instagram: datosBase.extra?.Instagram
+      instagram: datosBase.extra?.Instagram,
+      ...(datosBase.preferenciasTarjeta || {}),
+      consentimientoPublicacion: datosBase.consentimientoPublicacion
     });
     const asistentesEnviados = new Map((Array.isArray(req.body?.asistentes) ? req.body.asistentes : [])
       .map(limpiarAsistente)
@@ -1609,6 +1639,14 @@ app.post('/congreso/admin/registros', requireFirebaseUser, requireFirebaseAdmin,
           correo: asistente.correo,
           telefono: asistente.telefono,
           extra: datosExtraAsistente(asistente, index === 0 ? datosBase.extra?.Notas : ''),
+          preferenciasTarjeta: {
+            mostrarCorreo: asistente.mostrarCorreo,
+            mostrarTelefono: asistente.mostrarTelefono,
+            mostrarSitioWeb: asistente.mostrarSitioWeb,
+            mostrarLinkedin: asistente.mostrarLinkedin,
+            mostrarInstagram: asistente.mostrarInstagram,
+            tarjetaVisible: asistente.tarjetaVisible
+          },
           asiento,
           monto: montoPorLugar,
           montoTotalCompra,
@@ -1715,7 +1753,7 @@ app.put('/congreso/admin/registros/:id', requireFirebaseUser, requireFirebaseAdm
     const ficha = fichaCongresoSeleccionada(req.body?.fichaId, fichas);
     if (!ficha) return res.status(400).json({ error: 'Selecciona una ficha válida' });
     const datos = datosRegistroTaquilla(req.body || {}, ficha);
-    if (!datos.nombre || !datos.asiento) return res.status(400).json({ error: 'Nombre y asiento son obligatorios' });
+    if (!datos.asiento) return res.status(400).json({ error: 'El asiento es obligatorio' });
     if (req.body?.enviarConfirmacion && !datos.correo) {
       return res.status(400).json({ error: 'Agrega un correo para enviar la confirmación' });
     }

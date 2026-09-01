@@ -25,9 +25,18 @@ function limpiarAsistente(value) {
     nombre: texto(source.nombre, 160),
     correo: texto(source.correo, 180).toLowerCase(),
     telefono: texto(source.telefono, 60),
+    cargo: texto(source.cargo, 120),
     empresa: texto(source.empresa, 180),
-    linkedinWeb: texto(source.linkedinWeb, 240),
+    bio: texto(source.bio, 500),
+    sitioWeb: texto(source.sitioWeb, 300),
+    linkedinWeb: texto(source.linkedinWeb || source.linkedin, 300),
     instagram: texto(source.instagram, 120),
+    mostrarCorreo: source.mostrarCorreo === true,
+    mostrarTelefono: source.mostrarTelefono === true,
+    mostrarSitioWeb: source.mostrarSitioWeb === true,
+    mostrarLinkedin: source.mostrarLinkedin === true,
+    mostrarInstagram: source.mostrarInstagram === true,
+    tarjetaVisible: source.tarjetaVisible === true,
     consentimientoPublicacion: source.consentimientoPublicacion === true
   };
 }
@@ -41,6 +50,9 @@ function datosExtraAsistente(value, notas = '') {
   const asistente = limpiarAsistente(value);
   return {
     Empresa: asistente.empresa,
+    Cargo: asistente.cargo,
+    'Presentación': asistente.bio,
+    'Sitio web': asistente.sitioWeb,
     'LinkedIn/Web': asistente.linkedinWeb,
     Instagram: asistente.instagram,
     Notas: texto(notas, 600)

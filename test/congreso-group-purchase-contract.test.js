@@ -46,7 +46,8 @@ test('ofrece enlaces opacos para guardar avances o completar cada asiento', () =
   assert.match(source, /app\.put\('\/congreso\/acompanantes\/:token'/);
   assert.match(source, /app\.post\('\/congreso\/acompanantes\/:token\/invitar'/);
   assert.match(source, /hashTokenGestion/);
-  assert.match(source, /req\.body\?\.finalizar === true/);
+  assert.doesNotMatch(source, /Completa nombre, correo y teléfono del asiento/);
+  assert.match(source, /preferenciasTarjeta/);
 });
 
 

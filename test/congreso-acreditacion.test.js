@@ -24,8 +24,10 @@ test('normaliza los datos editables sin aceptar campos arbitrarios', () => {
     instagram: ' @ana ', consentimientoPublicacion: true, admin: true
   }), {
     registroId: 'reg-1', asiento: 'F9', nombre: 'Ana', correo: 'ana@example.com',
-    telefono: '555', empresa: 'Clínica', linkedinWeb: 'https://example.com',
-    instagram: '@ana', consentimientoPublicacion: true
+    telefono: '555', cargo: '', empresa: 'Clínica', bio: '', sitioWeb: '',
+    linkedinWeb: 'https://example.com', instagram: '@ana', mostrarCorreo: false,
+    mostrarTelefono: false, mostrarSitioWeb: false, mostrarLinkedin: false,
+    mostrarInstagram: false, tarjetaVisible: false, consentimientoPublicacion: true
   });
 });
 

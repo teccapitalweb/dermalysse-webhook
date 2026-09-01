@@ -32,13 +32,25 @@ test('construye el perfil desde el registro y respeta privacidad', () => {
     telefono: '+525500000000',
     extra: { Empresa: 'Clínica Ana', Instagram: '@ana', 'LinkedIn/Web': 'linkedin.com/in/ana' }
   };
-  const perfil = perfilQr({ mostrarCorreo: false, mostrarTelefono: true }, registro);
+  const perfil = perfilQr({ mostrarCorreo: false, mostrarTelefono: true, mostrarInstagram: true }, registro);
   const publico = perfilPublico(perfil);
   assert.equal(publico.nombre, 'Ana Dermatóloga');
   assert.equal(publico.empresa, 'Clínica Ana');
   assert.equal(publico.correo, '');
   assert.equal(publico.telefono, '+525500000000');
   assert.equal(publico.instagram, '@ana');
+});
+
+test('reutiliza campos y privacidad capturados antes de vincular la tarjeta', () => {
+  const perfil = perfilQr({}, {
+    nombre: 'Ana',
+    extra: { Cargo: 'Dermatóloga', 'Presentación': 'Especialista en piel', 'Sitio web': 'https://ana.mx' },
+    preferenciasTarjeta: { mostrarSitioWeb: true, tarjetaVisible: true }
+  });
+  assert.equal(perfil.cargo, 'Dermatóloga');
+  assert.equal(perfil.bio, 'Especialista en piel');
+  assert.equal(perfil.sitioWeb, 'https://ana.mx');
+  assert.equal(perfil.mostrarSitioWeb, true);
 });
 
 test('todas las rutas administrativas QR requieren usuario y administrador', () => {
