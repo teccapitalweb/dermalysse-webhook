@@ -420,7 +420,26 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           const montoPorLugar = montoTotalCompra === null ? null : montoTotalCompra / cantidadBoletos;
           const registrosActivos = [];
           const registrosIds = [];
-          const comprador = datosCompradorStripe(session, md);
+          let nombreTitularPago = '';
+          try {
+            const paymentIntentId = typeof session.payment_intent === 'string'
+              ? session.payment_intent
+              : session.payment_intent?.id;
+            if (paymentIntentId) {
+              const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+                expand: ['payment_method']
+              });
+              const paymentMethod = paymentIntent.payment_method;
+              nombreTitularPago = typeof paymentMethod === 'object'
+                ? paymentMethod?.billing_details?.name || ''
+                : '';
+            }
+          } catch (error) {
+            // Link y billeteras suelen poblar customer_details.name. Si Stripe
+            // no permite expandir el método, esos respaldos siguen operando.
+            console.warn('No se pudo leer el nombre del titular del pago:', error.message);
+          }
+          const comprador = datosCompradorStripe(session, md, nombreTitularPago);
           const tokenGestion = crearTokenGestion();
           const ahoraCompra = new Date().toISOString();
 
@@ -1125,11 +1144,8 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
         expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
         // Teléfono lo pide Stripe de forma nativa:
         phone_number_collection: { enabled: true },
-        // Nombre individual obligatorio; el nombre comercial se deja para el
-        // formulario posterior porque es opcional.
-        name_collection: {
-          individual: { enabled: true, optional: false }
-        },
+        // El nombre se toma del titular del método de pago. No habilitar
+        // name_collection: produciría un segundo campo de nombre redundante.
         locale: 'es-419',
         custom_text: {
           submit: {
@@ -1240,13 +1256,13 @@ function datosRegistroTaquilla(body, ficha) {
   };
 }
 
-function datosCompradorStripe(session, metadata = {}) {
+function datosCompradorStripe(session, metadata = {}, nombreTitularPago = '') {
   const individualName = session.collected_information?.individual_name;
   const nombreRecolectado = typeof individualName === 'string'
     ? individualName
     : individualName?.value || individualName?.name || '';
   return limpiarAsistente({
-    nombre: nombreRecolectado || session.customer_details?.name || metadata.nombre || '',
+    nombre: nombreTitularPago || nombreRecolectado || session.customer_details?.name || metadata.nombre || '',
     correo: session.customer_details?.email || metadata.correo || '',
     telefono: session.customer_details?.phone || metadata.telefono || ''
   });

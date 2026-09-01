@@ -15,7 +15,7 @@ test('aparta el grupo completo en una transacción antes de abrir Stripe', () =>
   assert.match(route, /Promise\.all\(asientoRefs\.map\(\(ref\) => tx\.get\(ref\)\)\)/);
   assert.match(route, /quantity: asientos\.length/);
   assert.match(route, /asientos: JSON\.stringify\(asientos\)/);
-  assert.match(route, /name_collection/);
+  assert.doesNotMatch(route, /name_collection:\s*\{/);
   assert.match(route, /phone_number_collection/);
   assert.match(route, /stripe\.customers\.create/);
   assert.match(route, /customer: customerCreadoId/);
@@ -36,6 +36,9 @@ test('crea un registro y un vínculo de asiento por cada boleto del grupo', () =
   assert.match(completed, /registroId: regRef\.id/);
   assert.match(completed, /datosAsistenteEstado/);
   assert.match(completed, /Registrar a mis acompañantes/);
+  assert.match(completed, /stripe\.paymentIntents\.retrieve/);
+  assert.match(completed, /paymentMethod\?\.billing_details\?\.name/);
+  assert.match(completed, /datosCompradorStripe\(session, md, nombreTitularPago\)/);
 });
 
 test('ofrece enlaces opacos para guardar avances o completar cada asiento', () => {
