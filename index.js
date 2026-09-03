@@ -7,6 +7,7 @@ const bundledCourseCatalog = require('./data/dermalysse-courses.json');
 const { hasCurrentMembership, membershipAccess } = require('./access-policy');
 const { advancePlaybackState, courseReleaseAccess, isLessonSequenceUnlocked } = require('./course-policy');
 const { ensureStripeCustomer } = require('./stripe-customer');
+const { subscriptionPeriodEndIso } = require('./stripe-subscription');
 const { cancelarReservaCongreso, normalizarAsientosCongreso } = require('./congreso-reservation');
 const {
   QR_TOTAL,
@@ -598,7 +599,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               stripeSubscriptionId: subscriptionId,
               plan: interval === 'year' ? 'anual' : 'mensual',
               amountPaid: amount,
-              currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString()),
+              currentPeriodEnd: subscriptionPeriodEndIso(sub),
               subscribedAt: new Date().toISOString(),
               cancelAtPeriodEnd: false,
               updatedAt: new Date().toISOString()
@@ -691,7 +692,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
           await db.collection('users').doc(uid).set({
             subscription: {
               status: 'active',
-              currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString()),
+              currentPeriodEnd: subscriptionPeriodEndIso(sub),
               cancelAtPeriodEnd: sub.cancel_at_period_end,
               updatedAt: new Date().toISOString()
             }
@@ -779,7 +780,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             subscription: {
               status: sub.status === 'active' ? 'active' : sub.status,
               cancelAtPeriodEnd: sub.cancel_at_period_end,
-              currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString()),
+              currentPeriodEnd: subscriptionPeriodEndIso(sub),
               updatedAt: new Date().toISOString()
             }
           }, { merge: true });
@@ -816,6 +817,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
     }
   } catch (err) {
     console.error('Webhook handler error:', err);
+    return res.status(500).json({ received: false });
   }
 
   res.json({ received: true });
@@ -2217,7 +2219,7 @@ app.post('/cancel-subscription', requireFirebaseUser, async (req, res) => {
     await db.collection('users').doc(firebaseUid).set({
       subscription: {
         cancelAtPeriodEnd: true,
-        currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString()),
+        currentPeriodEnd: subscriptionPeriodEndIso(sub),
         updatedAt: new Date().toISOString()
       }
     }, { merge: true });
@@ -2225,13 +2227,14 @@ app.post('/cancel-subscription', requireFirebaseUser, async (req, res) => {
     res.json({
       success: true,
       cancelAtPeriodEnd: true,
-      currentPeriodEnd: (sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : new Date().toISOString())
+      currentPeriodEnd: subscriptionPeriodEndIso(sub)
     });
 
     try {
       const memberEmail = userData.email || '';
       const memberName = userData.name || '';
-      const endDate = sub.current_period_end ? new Date(sub.current_period_end * 1000).toLocaleDateString('es-MX', { day:'numeric', month:'long', year:'numeric' }) : 'N/A';
+      const periodEndIso = subscriptionPeriodEndIso(sub);
+      const endDate = periodEndIso ? new Date(periodEndIso).toLocaleDateString('es-MX', { day:'numeric', month:'long', year:'numeric' }) : 'N/A';
       if (memberEmail) {
         sendEmail(memberEmail, 'Cancelación programada - Club Dermalysse',
           emailTemplate('Cancelación programada',
