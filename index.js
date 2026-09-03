@@ -6,6 +6,7 @@ const admin = require('firebase-admin');
 const bundledCourseCatalog = require('./data/dermalysse-courses.json');
 const { hasCurrentMembership, membershipAccess } = require('./access-policy');
 const { advancePlaybackState, courseReleaseAccess, isLessonSequenceUnlocked } = require('./course-policy');
+const { ensureStripeCustomer } = require('./stripe-customer');
 const { cancelarReservaCongreso, normalizarAsientosCongreso } = require('./congreso-reservation');
 const {
   QR_TOTAL,
@@ -989,20 +990,18 @@ app.post('/create-checkout-session', requireFirebaseUser, async (req, res) => {
       return res.status(400).json({ error: 'El precio configurado ($' + montoMXN + ' MXN) es menor al mínimo de Stripe ($10 MXN). Revisa Configuración en el panel admin.' });
     }
 
-    // Buscar o crear customer de Stripe
-    let customerId;
-    const userDoc = await db.collection('users').doc(firebaseUid).get();
+    // Validar el customer guardado antes de usarlo. Los IDs creados durante las
+    // pruebas no existen en Stripe live; en ese caso se reemplazan automáticamente.
+    const userRef = db.collection('users').doc(firebaseUid);
+    const userDoc = await userRef.get();
     const userData = userDoc.exists ? userDoc.data() : {};
-
-    if (userData.subscription?.stripeCustomerId) {
-      customerId = userData.subscription.stripeCustomerId;
-    } else {
-      const customer = await stripe.customers.create({
-        email: email || userData.email || '',
-        metadata: { firebaseUid }
-      });
-      customerId = customer.id;
-    }
+    const customerId = await ensureStripeCustomer({
+      stripe,
+      userRef,
+      firebaseUid,
+      email,
+      userData
+    });
 
     // ← PRECIO DINÁMICO: en vez de Price ID fijo, armamos el price_data aquí
     const session = await stripe.checkout.sessions.create({
