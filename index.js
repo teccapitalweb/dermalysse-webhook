@@ -5,6 +5,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin = require('firebase-admin');
 const bundledCourseCatalog = require('./data/dermalysse-courses.json');
 const { hasCurrentMembership, membershipAccess } = require('./access-policy');
+const { lessonAccess } = require('./lesson-access');
 const { advancePlaybackState, courseReleaseAccess, isLessonSequenceUnlocked } = require('./course-policy');
 const { ensureStripeCustomer } = require('./stripe-customer');
 const { subscriptionPeriodEndIso } = require('./stripe-subscription');
@@ -860,7 +861,11 @@ async function findLessonByVideoId(videoId) {
     const lesson = Array.isArray(course.lessons)
       ? course.lessons.find(item => String(item.videoId || '').toLowerCase() === videoId)
       : null;
-    if (lesson) return { course, lesson };
+    if (lesson) {
+      const currentCourse = await findCourse(course.id);
+      const currentLesson = (currentCourse.lessons || []).find(item => String(item.videoId || '').toLowerCase() === videoId);
+      return currentLesson ? { course: currentCourse, lesson: currentLesson } : null;
+    }
   }
   const snapshot = await db.collection('courses').get();
   for (const docSnapshot of snapshot.docs) {
@@ -874,48 +879,14 @@ async function findLessonByVideoId(videoId) {
   return null;
 }
 
-function publicCourseAccess(course) {
-  if (!course || (course.status && course.status !== 'published')) {
-    return { allowed: false, reason: 'course_not_published' };
-  }
-  if (String(course.releaseType || 'immediate').toLowerCase() === 'scheduled') {
-    const unlockAt = Date.parse(course.unlockDate || '');
-    if (!Number.isFinite(unlockAt) || unlockAt > Date.now()) {
-      return { allowed: false, reason: 'scheduled_locked', unlockAt };
-    }
-  }
-  return { allowed: true, reason: 'preview' };
-}
-
 async function authorizeLesson(uid, course, lesson) {
   const [adminDoc, userDoc] = await Promise.all([
     db.collection('admins').doc(uid).get(),
     db.collection('users').doc(uid).get()
   ]);
-  const isAdmin = adminDoc.exists;
-  const userData = userDoc.exists ? userDoc.data() : {};
-  const memberAccess = membershipAccess(userData);
-  const releaseAccess = courseReleaseAccess(course, bundledCourseCatalog, userData);
-
-  if (isAdmin) return { allowed: true, isAdmin, userData, progressAllowed: true, releaseAccess };
-  if (lesson.isPreview) {
-    const previewAccess = publicCourseAccess(course);
-    return {
-      allowed: previewAccess.allowed,
-      reason: previewAccess.reason,
-      isAdmin,
-      userData,
-      progressAllowed: memberAccess.allowed && releaseAccess.allowed,
-      releaseAccess
-    };
-  }
-  if (!memberAccess.allowed) {
-    return { allowed: false, reason: 'membership_required', isAdmin, userData, progressAllowed: false, releaseAccess };
-  }
-  if (!releaseAccess.allowed) {
-    return { allowed: false, reason: releaseAccess.reason, isAdmin, userData, progressAllowed: false, releaseAccess };
-  }
-  return { allowed: true, isAdmin, userData, progressAllowed: true, releaseAccess };
+  return lessonAccess(userDoc.exists ? userDoc.data() : {}, course, lesson, {
+    isAdmin: adminDoc.exists, catalog: bundledCourseCatalog
+  });
 }
 
 function accessErrorMessage(reason) {
@@ -927,7 +898,7 @@ function accessErrorMessage(reason) {
 }
 
 async function lessonSequenceAccess(uid, course, lesson, authorization) {
-  if (authorization.isAdmin || lesson.isPreview) return { allowed: true };
+  if (authorization.isAdmin || authorization.freeLesson) return { allowed: true };
   const lessons = Array.isArray(course.lessons) ? course.lessons : [];
   const lessonIndex = lessons.findIndex(item => String(item.id || '') === String(lesson.id || ''));
   if (lessonIndex <= 0) return { allowed: true };
@@ -961,7 +932,7 @@ app.post('/api/bunny/embed-token', requireFirebaseUser, async (req, res) => {
     const token = crypto.createHash('sha256').update(BUNNY_STREAM_TOKEN_KEY + videoId + expires).digest('hex');
     const embedUrl = `https://iframe.mediadelivery.net/embed/${encodeURIComponent(BUNNY_STREAM_LIBRARY_ID)}/${videoId}?token=${token}&expires=${expires}`;
     res.set('Cache-Control', 'no-store, private');
-    return res.json({ embedUrl, expires, preview: !!match.lesson.isPreview });
+    return res.json({ embedUrl, expires, preview: authorization.freeLesson === true });
   } catch (error) {
     console.error('[Bunny token]', error.message);
     return res.status(500).json({ error: 'No se pudo autorizar el video' });
@@ -2425,7 +2396,7 @@ app.post('/bunny/playback', requireFirebaseUser, async (req, res) => {
     }
 
     res.set('Cache-Control', 'no-store');
-    res.json({ embedUrl, expires, preview: !!lesson.isPreview, playbackSessionId });
+    res.json({ embedUrl, expires, preview: authorization.freeLesson === true, playbackSessionId });
   } catch (error) {
     console.error('Bunny playback error:', error.message);
     res.status(500).json({ error: 'No fue posible preparar la reproducción' });
@@ -2629,8 +2600,7 @@ async function ensureBundledCatalog() {
       return data.catalogVersion === BUNDLED_CATALOG_VERSION
         && data.status === 'published'
         && Array.isArray(data.lessons)
-        && data.lessons.length === expectedLessons.length
-        && data.lessons.filter(lesson => lesson.isPreview === true).length === 1;
+        && data.lessons.length === expectedLessons.length;
     });
     if (complete) return { changed: false, courseCount: bundledCourseCatalog.length };
   }

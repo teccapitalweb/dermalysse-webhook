@@ -49,7 +49,7 @@ Stripe Checkout solicita solamente nombre individual, correo y teléfono del com
 
 El Club solicita `POST /bunny/playback` con un Firebase ID token y los identificadores internos de curso y clase. El servidor valida que el recurso pertenezca al catálogo y genera un embed firmado de corta duración.
 
-Una clase marcada `isPreview: true` está disponible para cualquier usuario registrado. Las demás requieren membresía vigente o cortesía vigente. El endpoint anterior `/api/bunny/embed-token` se conserva temporalmente para compatibilidad durante la actualización del frontend.
+Solo el curso inicial `course-uso-de-tecnologias-avanzadas-en-cosmiatria` permite acceso gratuito a usuarios registrados: todas sus clases excepto la última. Un curso de cero o una clase no concede clases gratuitas. `isPreview` es metadata informativa y nunca autoriza reproducción; ni filtros ni orden de tarjetas cambian el curso inicial. Las demás clases requieren membresía vigente o cortesía vigente; se conserva acceso administrativo. El progreso del tramo gratuito también se acredita y guarda en el servidor. El endpoint anterior `/api/bunny/embed-token` se conserva temporalmente para compatibilidad durante la actualización del frontend.
 
 El avance se reporta a `POST /courses/progress`. El servidor limita el tiempo acreditado al tiempo real transcurrido, completa la clase al 85% y exige la clase anterior antes de firmar la siguiente. `POST /courses/certificate` solo emite un folio cuando todas las clases están acreditadas; `GET /certificates/:code` permite comprobarlo públicamente sin exponer datos privados de la cuenta.
 

@@ -63,7 +63,7 @@ test('exige completar la clase anterior para avanzar', () => {
   assert.equal(isLessonSequenceUnlocked(course, course.lessons[2], ['l2'], false), true);
 });
 
-test('permite la vista previa y el acceso administrativo sin prerrequisitos', () => {
+test('permite la primera clase y el acceso administrativo sin prerrequisitos', () => {
   const course = { lessons: [{ id: 'l1', isPreview: true }, { id: 'l2' }] };
   assert.equal(isLessonSequenceUnlocked(course, course.lessons[0], [], false), true);
   assert.equal(isLessonSequenceUnlocked(course, course.lessons[1], [], true), true);

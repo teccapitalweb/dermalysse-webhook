@@ -61,7 +61,7 @@ function courseReleaseAccess(course, catalog, userData, nowValue, dripDaysValue)
 }
 
 function isLessonSequenceUnlocked(course, lesson, completedLessonIds, isAdmin) {
-  if (isAdmin || (lesson && lesson.isPreview)) return true;
+  if (isAdmin) return true;
   const lessons = course && Array.isArray(course.lessons) ? course.lessons : [];
   const lessonIndex = lessons.findIndex(item => String(item.id || '') === String((lesson && lesson.id) || ''));
   if (lessonIndex <= 0) return true;
