@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   advancePlaybackState,
+  cursoGratisLessonAccess,
   courseReleaseAccess,
   isLessonSequenceUnlocked
 } = require('../course-policy');
@@ -67,4 +68,21 @@ test('permite la vista previa y el acceso administrativo sin prerrequisitos', ()
   const course = { lessons: [{ id: 'l1', isPreview: true }, { id: 'l2' }] };
   assert.equal(isLessonSequenceUnlocked(course, course.lessons[0], [], false), true);
   assert.equal(isLessonSequenceUnlocked(course, course.lessons[1], [], true), true);
+});
+
+test('el curso gratis elegido abre las clases previas, no la última, y conserva el orden', () => {
+  const course = { id: 'c1', status: 'published', lessons: [{ id: 'l1', isPreview: true }, { id: 'l2' }, { id: 'l3' }] };
+  const user = { cursoGratis: 'c1' };
+  assert.deepEqual(cursoGratisLessonAccess(course, course.lessons[0], user), { allowed: true, reason: 'curso_gratis' });
+  assert.deepEqual(cursoGratisLessonAccess(course, course.lessons[1], user), { allowed: true, reason: 'curso_gratis' });
+  assert.equal(isLessonSequenceUnlocked(course, course.lessons[1], [], false), false);
+  assert.equal(isLessonSequenceUnlocked(course, course.lessons[1], ['l1'], false), true);
+  assert.deepEqual(cursoGratisLessonAccess(course, course.lessons[2], user), { allowed: false, reason: 'membership_required' });
+});
+
+test('el curso gratis no abre otro curso ni un curso sin publicar', () => {
+  const course = { id: 'c1', status: 'published', lessons: [{ id: 'l1' }, { id: 'l2' }] };
+  assert.equal(cursoGratisLessonAccess(course, course.lessons[0], { cursoGratis: 'c2' }), null);
+  assert.deepEqual(cursoGratisLessonAccess({ ...course, status: 'draft' }, course.lessons[0], { cursoGratis: 'c1' }), { allowed: false, reason: 'course_not_published' });
+  assert.deepEqual(cursoGratisLessonAccess(course, { id: 'elsewhere' }, { cursoGratis: 'c1' }), { allowed: false, reason: 'lesson_not_found' });
 });

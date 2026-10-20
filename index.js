@@ -5,7 +5,7 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin = require('firebase-admin');
 const bundledCourseCatalog = require('./data/dermalysse-courses.json');
 const { hasCurrentMembership, membershipAccess } = require('./access-policy');
-const { advancePlaybackState, courseReleaseAccess, isLessonSequenceUnlocked } = require('./course-policy');
+const { advancePlaybackState, courseReleaseAccess, cursoGratisLessonAccess, isLessonSequenceUnlocked } = require('./course-policy');
 const { ensureStripeCustomer } = require('./stripe-customer');
 const { subscriptionPeriodEndIso } = require('./stripe-subscription');
 const { cancelarReservaCongreso, normalizarAsientosCongreso } = require('./congreso-reservation');
@@ -898,6 +898,12 @@ async function authorizeLesson(uid, course, lesson) {
   const releaseAccess = courseReleaseAccess(course, bundledCourseCatalog, userData);
 
   if (isAdmin) return { allowed: true, isAdmin, userData, progressAllowed: true, releaseAccess };
+  if (!memberAccess.allowed) {
+    const accesoCursoGratis = cursoGratisLessonAccess(course, lesson, userData);
+    if (accesoCursoGratis) {
+      return { ...accesoCursoGratis, isAdmin, userData, progressAllowed: accesoCursoGratis.allowed, releaseAccess };
+    }
+  }
   if (lesson.isPreview) {
     const previewAccess = publicCourseAccess(course);
     return {

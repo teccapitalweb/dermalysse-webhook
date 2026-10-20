@@ -69,6 +69,24 @@ function isLessonSequenceUnlocked(course, lesson, completedLessonIds, isAdmin) {
   return completed.has(String(lessons[lessonIndex - 1].id || ''));
 }
 
+/**
+ * Permite al miembro gratuito reproducir el curso que eligió, excepto la última clase.
+ * Devuelve null si no aplica; la secuencia de clases se sigue validando por separado.
+ */
+function cursoGratisLessonAccess(course, lesson, userData) {
+  const elegido = String((userData && userData.cursoGratis) || '').trim();
+  if (!elegido || String((course && course.id) || '') !== elegido) return null;
+  if (course && course.status && course.status !== 'published') {
+    return { allowed: false, reason: 'course_not_published' };
+  }
+  const lessons = course && Array.isArray(course.lessons) ? course.lessons : [];
+  const lessonId = String((lesson && lesson.id) || '');
+  const index = lessons.findIndex(item => String((item && item.id) || '') === lessonId);
+  if (index < 0 || lessons.length === 0) return { allowed: false, reason: 'lesson_not_found' };
+  if (index === lessons.length - 1) return { allowed: false, reason: 'membership_required' };
+  return { allowed: true, reason: 'curso_gratis' };
+}
+
 function advancePlaybackState(previousValue, inputValue, nowValue) {
   const previous = previousValue || {};
   const input = inputValue || {};
@@ -104,6 +122,7 @@ module.exports = {
   COMPLETION_RATIO,
   DEFAULT_DRIP_DAYS,
   advancePlaybackState,
+  cursoGratisLessonAccess,
   courseReleaseAccess,
   isLessonSequenceUnlocked,
   membershipStartedAt,
