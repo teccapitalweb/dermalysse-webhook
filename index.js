@@ -8,6 +8,7 @@ const { hasCurrentMembership, membershipAccess } = require('./access-policy');
 const { advancePlaybackState, courseReleaseAccess, cursoGratisLessonAccess, isLessonSequenceUnlocked } = require('./course-policy');
 const { ensureStripeCustomer } = require('./stripe-customer');
 const { subscriptionPeriodEndIso } = require('./stripe-subscription');
+const { enviarEmailPagoFallido } = require('./emails-pago');
 const { cancelarReservaCongreso, normalizarAsientosCongreso } = require('./congreso-reservation');
 const {
   QR_TOTAL,
@@ -811,6 +812,35 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             }
           }, { merge: true });
           console.log('⚠️ Pago fallido para:', uid);
+
+          // Aviso al miembro: "actualiza tu tarjeta". Best-effort y aislado:
+          // los emails jamás tumban un cobro, así que nada aquí puede romper el webhook.
+          try {
+            let correo = '';
+            let nombre = '';
+            try {
+              const [uSnap, mSnap] = await Promise.all([
+                db.collection('users').doc(uid).get(),
+                db.collection('members').doc(uid).get(),
+              ]);
+              const u = uSnap.exists ? uSnap.data() : {};
+              const m = mSnap.exists ? mSnap.data() : {};
+              correo = u.email || m.email || '';
+              nombre = u.name || m.name || '';
+            } catch (e) { /* lectura best-effort del perfil */ }
+
+            let razon = null;
+            try {
+              if (invoice.payment_intent) {
+                const pi = await stripe.paymentIntents.retrieve(invoice.payment_intent);
+                razon = (pi && pi.last_payment_error && pi.last_payment_error.message) || null;
+              }
+            } catch (e) { /* la razón del rechazo es opcional */ }
+
+            await enviarEmailPagoFallido(sendEmail, { to: correo, nombre, razon }, emailTemplate);
+          } catch (e) {
+            console.warn('⚠️ No se pudo enviar el aviso de pago fallido (se ignora):', e.message);
+          }
         }
         break;
       }
