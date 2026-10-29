@@ -22,6 +22,7 @@ test('autoriza una cortesía vigente', () => {
 
 test('mantiene acceso tras cancelar mientras el periodo siga vigente', () => {
   assert.equal(membershipAccess({ subscription: { status: 'canceled', currentPeriodEnd: future } }, NOW).reason, 'canceling');
+  assert.equal(membershipAccess({ subscription: { status: 'active', cancelAtPeriodEnd: true, currentPeriodEnd: future } }, NOW).reason, 'canceling');
 });
 
 test('bloquea una membresía vencida', () => {

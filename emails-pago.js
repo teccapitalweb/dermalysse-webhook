@@ -53,14 +53,15 @@ function construirEmailPagoFallido({ nombre, razon, portalUrl } = {}, render) {
 
 // Envía el aviso de forma segura. Nunca lanza: devuelve el resultado del emailer
 // o { sent:false, reason }. `emailer` = sendEmail(to, subject, html) (inyectado).
-async function enviarEmailPagoFallido(emailer, { to, nombre, razon, portalUrl } = {}, render, logger = console) {
+async function enviarEmailPagoFallido(emailer, { to, nombre, razon, portalUrl, idempotencyKey } = {}, render, logger = console) {
   if (!to) {
     logger.log('ℹ️ Pago fallido: sin correo del miembro; no se envía aviso');
     return { sent: false, reason: 'sin_correo' };
   }
   const { subject, html } = construirEmailPagoFallido({ nombre, razon, portalUrl }, render);
   try {
-    const res = await emailer(to, subject, html);
+    const options = idempotencyKey ? { idempotencyKey } : {};
+    const res = await emailer(to, subject, html, options);
     logger.log('📧 Aviso de pago fallido a:', maskEmail(to), (res && res.reason) || '');
     return res || { sent: false, reason: 'sin_resultado' };
   } catch (e) {

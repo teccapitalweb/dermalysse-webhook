@@ -54,16 +54,17 @@ test('un emailer caído NO rompe el flujo (nunca lanza)', async () => {
 
 test('el aviso llega al email correcto del miembro', async () => {
   const enviados = [];
-  const fakeEmailer = async (to, subject, html) => { enviados.push({ to, subject, html }); return { sent: true, reason: 'enviada' }; };
+  const fakeEmailer = async (to, subject, html, options) => { enviados.push({ to, subject, html, options }); return { sent: true, reason: 'enviada' }; };
   const res = await enviarEmailPagoFallido(
     fakeEmailer,
-    { to: 'socio@clinica.mx', nombre: 'Dra. Pérez' },
+    { to: 'socio@clinica.mx', nombre: 'Dra. Pérez', idempotencyKey: 'invoice-in_123' },
     (t, b) => b,
     silencioso,
   );
   assert.equal(res.sent, true);
   assert.equal(enviados.length, 1);
   assert.equal(enviados[0].to, 'socio@clinica.mx');
+  assert.deepEqual(enviados[0].options, { idempotencyKey: 'invoice-in_123' });
   assert.match(enviados[0].subject, /pago/i);
 });
 

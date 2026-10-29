@@ -2,12 +2,17 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const admin = require('firebase-admin');
+const { cert, initializeApp } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
+const { FieldValue, getFirestore, Timestamp } = require('firebase-admin/firestore');
 const bundledCourseCatalog = require('./data/dermalysse-courses.json');
 const { hasCurrentMembership, membershipAccess } = require('./access-policy');
 const { advancePlaybackState, courseReleaseAccess, cursoGratisLessonAccess, isLessonSequenceUnlocked } = require('./course-policy');
-const { ensureStripeCustomer } = require('./stripe-customer');
+const { customerBelongsToUser, ensureStripeCustomer } = require('./stripe-customer');
 const { subscriptionPeriodEndIso } = require('./stripe-subscription');
+const { subscriptionIdFromInvoice } = require('./stripe-invoice');
+const { persistStripeMembership, subscriptionBelongsToUser } = require('./stripe-membership');
+const { checkoutUrl, clubPricing, congressPricing } = require('./payment-config');
 const { enviarEmailPagoFallido } = require('./emails-pago');
 const { cancelarReservaCongreso, normalizarAsientosCongreso } = require('./congreso-reservation');
 const {
@@ -31,10 +36,11 @@ const {
 
 // ═══ FIREBASE ADMIN ═══
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
+const firebaseApp = initializeApp({
+  credential: cert(serviceAccount)
 });
-const db = admin.firestore();
+const db = getFirestore(firebaseApp);
+const firebaseAuth = getAuth(firebaseApp);
 
 // ═══ BUNNY STREAM ═══
 // BUNNY_STREAM_TOKEN_KEY es la "Token authentication key" de Security.
@@ -186,47 +192,26 @@ function emailTemplate(title, body, buttonText, buttonUrl) {
   </div>`;
 }
 
-// ═══ GUARDA: ignorar eventos de suscripciones viejas/abandonadas ═══
-async function _isStaleSubEvent(uid, eventSubId, incomingStatus) {
-  try {
-    const snap = await db.collection('users').doc(uid).get();
-    const stored = snap.exists ? (snap.data().subscription || {}) : {};
-    if (stored.status !== 'active') return false;
-    if (eventSubId && stored.stripeSubscriptionId && eventSubId !== stored.stripeSubscriptionId) {
-      console.log('⏭️  Evento ignorado (sub distinta a la activa):', eventSubId, 'vs', stored.stripeSubscriptionId);
-      return true;
-    }
-    if (incomingStatus === 'incomplete' || incomingStatus === 'incomplete_expired') {
-      console.log('⏭️  Evento ignorado (downgrade incomplete sobre activa):', uid);
-      return true;
-    }
-    return false;
-  } catch (e) {
-    console.error('Stale-check error:', e);
-    return false;
-  }
-}
-
 // ═══ DEFENSA CONTAMINACIÓN CRUZADA (cuenta Stripe compartida entre ~16 clubes) ═══
 // Capa 1: metadata.source === 'dermalysse'.
 // Capa 2 (fallback si no hay source, ej. suscripciones creadas antes de este parche):
 // el producto de Dermalysse siempre se llama "Club Dermalysse · Plan ...", ya que
 // este webhook usa price_data dinámico (no Price IDs fijos) al crear el checkout.
-// Fail-open: si no se puede verificar por un error de red/API, se deja pasar el
-// evento para no bloquear pagos reales por un problema temporal de Stripe.
+// Fail-closed: si no hay metadata y tampoco se puede verificar el producto, no se
+// escribe en Dermalysse. Stripe reintentará el webhook; nunca contaminamos otro club.
 async function _perteneceAEsteClub(metadataSource, sub) {
   if (metadataSource) return metadataSource === 'dermalysse';
-  if (!sub) return true;
+  if (!sub) return false;
   try {
     const productRef = sub.items?.data?.[0]?.price?.product;
-    if (!productRef) return true;
+    if (!productRef) return false;
     const product = typeof productRef === 'string'
       ? await stripe.products.retrieve(productRef)
       : productRef;
     return !!(product?.name && product.name.toLowerCase().includes('dermalysse'));
   } catch (e) {
-    console.error('⚠️  Chequeo de producto falló, dejando pasar (fail-open):', e.message);
-    return true;
+    console.error('⚠️  Chequeo de producto falló; evento rechazado de forma segura:', e.message);
+    return false;
   }
 }
 
@@ -236,14 +221,13 @@ async function _perteneceAEsteClub(metadataSource, sub) {
 async function leerPreciosConfig() {
   try {
     const snap = await db.collection('config').doc('club').get();
-    const c = snap.exists ? snap.data() : {};
-    const precioMes = Number(c.precioMes) > 0 ? Number(c.precioMes) : 200;
-    const precioAno = Number(c.precioAno) > 0 ? Number(c.precioAno) : 1799;
+    if (!snap.exists) throw new Error('PAYMENT_CONFIG_MISSING:club');
+    const { precioMes, precioAno } = clubPricing(snap.data());
     console.log('📊 Precios cargados desde Firestore:', { precioMes, precioAno });
     return { precioMes, precioAno };
   } catch (e) {
     console.error('Error leyendo precios config:', e);
-    return { precioMes: 200, precioAno: 1799 };
+    throw new Error('La configuración de cobro de membresías no está disponible.');
   }
 }
 
@@ -251,16 +235,11 @@ async function leerPreciosConfig() {
 async function leerFichasCongreso() {
   try {
     const snap = await db.collection('config').doc('congreso').get();
-    const c = snap.exists ? snap.data() : {};
-    return {
-      ficha1Nombre: c.ficha1Nombre || 'Especial',
-      ficha1Precio: Number(c.ficha1Precio) > 0 ? Number(c.ficha1Precio) : 15,
-      ficha2Nombre: c.ficha2Nombre || 'General',
-      ficha2Precio: Number(c.ficha2Precio) > 0 ? Number(c.ficha2Precio) : 10
-    };
+    if (!snap.exists) throw new Error('PAYMENT_CONFIG_MISSING:congreso');
+    return congressPricing(snap.data());
   } catch (e) {
     console.error('Error leyendo fichas congreso:', e);
-    return { ficha1Nombre: 'Especial', ficha1Precio: 15, ficha2Nombre: 'General', ficha2Precio: 10 };
+    throw new Error('La configuración de cobro del congreso no está disponible.');
   }
 }
 
@@ -580,6 +559,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
         }
 
         if (uid && subscriptionId) {
+          if (!['paid', 'no_payment_required'].includes(session.payment_status)) {
+            console.log('⏭️  Checkout de membresía todavía no pagado; no se activa:', session.id);
+            break;
+          }
           const sub = await stripe.subscriptions.retrieve(subscriptionId);
           if (!(await _perteneceAEsteClub(session.metadata?.source, sub))) {
             console.log('⏭️  checkout.session.completed ignorado (evento de otro club):', uid);
@@ -593,26 +576,15 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             ? session.amount_total / 100
             : (sub.items.data[0]?.price?.unit_amount ? sub.items.data[0].price.unit_amount / 100 : null);
 
-          await db.collection('users').doc(uid).set({
-            subscription: {
-              status: 'active',
-              stripeCustomerId: customerId,
-              stripeSubscriptionId: subscriptionId,
-              plan: interval === 'year' ? 'anual' : 'mensual',
-              amountPaid: amount,
-              currentPeriodEnd: subscriptionPeriodEndIso(sub),
-              subscribedAt: new Date().toISOString(),
-              cancelAtPeriodEnd: false,
-              updatedAt: new Date().toISOString()
-            }
-          }, { merge: true });
-
-          try {
-            await db.collection('members').doc(uid).set({
-              plan: interval === 'year' ? 'Anual' : 'Mensual',
-              status: 'active'
-            }, { merge: true });
-          } catch(e) {}
+          const activadaEn = new Date().toISOString();
+          await persistStripeMembership(db, uid, sub, {
+            allowReplace: true,
+            status: 'active',
+            customerId,
+            amountPaid: amount,
+            subscribedAt: activadaEn,
+            now: activadaEn,
+          });
           console.log('✅ Suscripción activada para:', uid, '- Plan:', interval);
 
           // Enviar email al miembro (con precio dinámico; si no hay monto, sin cifra — nunca "$null")
@@ -626,7 +598,8 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
                 '<p>Tu suscripción al <strong>Plan ' + planName + '</strong> ha sido activada exitosamente.</p>' +
                 '<p>Ya tienes acceso completo a todos los cursos, webinars en vivo, material PDF y la comunidad del Club Dermalysse.</p>' +
                 '<p style="margin-top:1rem;"><strong>Plan:</strong> ' + planName + '<br><strong>Estado:</strong> Activa</p>',
-                'Ir al Club', 'https://club.dermalyssemx.com/')
+                'Ir al Club', 'https://club.dermalyssemx.com/'),
+              { idempotencyKey: 'dermalysse-bienvenida-' + session.id }
             );
           }
 
@@ -634,7 +607,8 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             emailTemplate('Nueva suscripción',
               '<p><strong>' + (memberEmail || uid) + '</strong> se ha suscrito al <strong>Plan ' + planName + '</strong>.</p>' +
               '<p style="margin-top:1rem;"><strong>ID de suscripción:</strong> ' + subscriptionId + '<br><strong>Fecha:</strong> ' + new Date().toLocaleString('es-MX') + '</p>',
-              'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/')
+              'Ver en Admin', 'https://teccapitalweb.github.io/admin_club_dermalysse-main/'),
+            { idempotencyKey: 'dermalysse-admin-suscripcion-' + session.id }
           ); }, 3000);
 
           try {
@@ -679,8 +653,11 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
       // ─── Renovación exitosa ───
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object;
-        const subscriptionId = invoice.subscription;
-        if (!subscriptionId) break;
+        const subscriptionId = subscriptionIdFromInvoice(invoice);
+        if (!subscriptionId) {
+          console.log('⏭️  Factura pagada sin suscripción asociada:', invoice.id);
+          break;
+        }
 
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
         const uid = sub.metadata?.firebaseUid;
@@ -690,14 +667,11 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             console.log('⏭️  invoice.payment_succeeded ignorado (evento de otro club):', uid);
             break;
           }
-          await db.collection('users').doc(uid).set({
-            subscription: {
-              status: 'active',
-              currentPeriodEnd: subscriptionPeriodEndIso(sub),
-              cancelAtPeriodEnd: sub.cancel_at_period_end,
-              updatedAt: new Date().toISOString()
-            }
-          }, { merge: true });
+          const resultado = await persistStripeMembership(db, uid, sub, { status: sub.status });
+          if (resultado.stale) {
+            console.log('⏭️  Renovación ignorada (suscripción anterior):', subscriptionId);
+            break;
+          }
           console.log('✅ Renovación exitosa para:', uid);
         }
         break;
@@ -713,21 +687,14 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             console.log('⏭️  customer.subscription.deleted ignorado (evento de otro club):', uid);
             break;
           }
-          if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
-          await db.collection('users').doc(uid).set({
-            subscription: {
-              status: 'canceled',
-              canceledAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            }
-          }, { merge: true });
-
-          try {
-            await db.collection('members').doc(uid).set({
-              plan: 'Free',
-              status: 'paused'
-            }, { merge: true });
-          } catch(e) {}
+          const canceladaEn = new Date().toISOString();
+          const resultado = await persistStripeMembership(db, uid, sub, {
+            status: 'canceled', canceledAt: canceladaEn, now: canceladaEn,
+          });
+          if (resultado.stale) {
+            console.log('⏭️  Cancelación ignorada (suscripción anterior):', sub.id);
+            break;
+          }
           console.log('❌ Suscripción cancelada para:', uid);
 
           try {
@@ -776,15 +743,11 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             console.log('⏭️  customer.subscription.updated ignorado (evento de otro club):', uid);
             break;
           }
-          if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
-          await db.collection('users').doc(uid).set({
-            subscription: {
-              status: sub.status === 'active' ? 'active' : sub.status,
-              cancelAtPeriodEnd: sub.cancel_at_period_end,
-              currentPeriodEnd: subscriptionPeriodEndIso(sub),
-              updatedAt: new Date().toISOString()
-            }
-          }, { merge: true });
+          const resultado = await persistStripeMembership(db, uid, sub, { status: sub.status });
+          if (resultado.stale) {
+            console.log('⏭️  Actualización ignorada (suscripción anterior):', sub.id);
+            break;
+          }
           console.log('🔄 Suscripción actualizada para:', uid);
         }
         break;
@@ -793,8 +756,11 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
       // ─── Pago fallido ───
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
-        const subscriptionId = invoice.subscription;
-        if (!subscriptionId) break;
+        const subscriptionId = subscriptionIdFromInvoice(invoice);
+        if (!subscriptionId) {
+          console.log('⏭️  Factura fallida sin suscripción asociada:', invoice.id);
+          break;
+        }
 
         const sub = await stripe.subscriptions.retrieve(subscriptionId);
         const uid = sub.metadata?.firebaseUid;
@@ -804,13 +770,11 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             console.log('⏭️  invoice.payment_failed ignorado (evento de otro club):', uid);
             break;
           }
-          if (await _isStaleSubEvent(uid, sub.id, sub.status)) break;
-          await db.collection('users').doc(uid).set({
-            subscription: {
-              status: 'past_due',
-              updatedAt: new Date().toISOString()
-            }
-          }, { merge: true });
+          const resultado = await persistStripeMembership(db, uid, sub, { status: sub.status });
+          if (resultado.stale) {
+            console.log('⏭️  Pago fallido ignorado (suscripción anterior):', sub.id);
+            break;
+          }
           console.log('⚠️ Pago fallido para:', uid);
 
           // Aviso al miembro: "actualiza tu tarjeta". Best-effort y aislado:
@@ -837,7 +801,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               }
             } catch (e) { /* la razón del rechazo es opcional */ }
 
-            await enviarEmailPagoFallido(sendEmail, { to: correo, nombre, razon }, emailTemplate);
+            await enviarEmailPagoFallido(sendEmail, {
+              to: correo, nombre, razon,
+              idempotencyKey: 'dermalysse-pago-fallido-' + invoice.id,
+            }, emailTemplate);
           } catch (e) {
             console.warn('⚠️ No se pudo enviar el aviso de pago fallido (se ignora):', e.message);
           }
@@ -862,7 +829,7 @@ async function requireFirebaseUser(req, res, next) {
     const authorization = String(req.headers.authorization || '');
     const match = authorization.match(/^Bearer\s+(.+)$/i);
     if (!match) return res.status(401).json({ error: 'Inicia sesión para continuar' });
-    req.firebaseUser = await admin.auth().verifyIdToken(match[1]);
+    req.firebaseUser = await firebaseAuth.verifyIdToken(match[1]);
     next();
   } catch (error) {
     return res.status(401).json({ error: 'La sesión no es válida o expiró' });
@@ -1057,8 +1024,8 @@ app.post('/create-checkout-session', requireFirebaseUser, async (req, res) => {
         quantity: 1
       }],
       mode: 'subscription',
-      success_url: successUrl || 'https://club.dermalyssemx.com/?payment=success',
-      cancel_url: cancelUrl || 'https://club.dermalyssemx.com/?payment=canceled',
+      success_url: checkoutUrl(successUrl, 'https://club.dermalyssemx.com/?payment=success', ['https://club.dermalyssemx.com']),
+      cancel_url: checkoutUrl(cancelUrl, 'https://club.dermalyssemx.com/?payment=canceled', ['https://club.dermalyssemx.com']),
       metadata: { firebaseUid, source: 'dermalysse' },
       subscription_data: {
         metadata: { firebaseUid, source: 'dermalysse' }
@@ -1189,8 +1156,8 @@ app.post('/create-checkout-session-congreso', async (req, res) => {
             message: 'Después del pago recibirás un enlace para completar o compartir los datos de cada asistente.'
           }
         },
-        success_url: successUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=success',
-        cancel_url: cancelUrl || 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=canceled',
+        success_url: checkoutUrl(successUrl, 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=success', ['https://congreso.dermalyssemx.com', 'https://teccapitalweb.github.io']),
+        cancel_url: checkoutUrl(cancelUrl, 'https://teccapitalweb.github.io/dermafutura-expo-2027/?congreso=canceled', ['https://congreso.dermalyssemx.com', 'https://teccapitalweb.github.io']),
         metadata: {
           source: 'congreso',
           ficha,
@@ -2248,17 +2215,17 @@ app.post('/cancel-subscription', requireFirebaseUser, async (req, res) => {
       return res.status(400).json({ error: 'No se encontró suscripción activa' });
     }
 
+    const storedSub = await stripe.subscriptions.retrieve(subscriptionId);
+    if (!subscriptionBelongsToUser(storedSub, firebaseUid) || !(await _perteneceAEsteClub(storedSub.metadata?.source, storedSub))) {
+      return res.status(403).json({ error: 'La suscripción no pertenece a esta cuenta' });
+    }
     const sub = await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: true
     });
 
-    await db.collection('users').doc(firebaseUid).set({
-      subscription: {
-        cancelAtPeriodEnd: true,
-        currentPeriodEnd: subscriptionPeriodEndIso(sub),
-        updatedAt: new Date().toISOString()
-      }
-    }, { merge: true });
+    await persistStripeMembership(db, firebaseUid, sub, {
+      status: sub.status, cancelAtPeriodEnd: true,
+    });
 
     res.json({
       success: true,
@@ -2289,7 +2256,7 @@ app.post('/cancel-subscription', requireFirebaseUser, async (req, res) => {
     } catch(e) {}
   } catch (err) {
     console.error('Cancel subscription error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'No se pudo programar la cancelación' });
   }
 });
 
@@ -2306,16 +2273,17 @@ app.post('/reactivate-subscription', requireFirebaseUser, async (req, res) => {
       return res.status(400).json({ error: 'No se encontró suscripción' });
     }
 
-    await stripe.subscriptions.update(subscriptionId, {
+    const storedSub = await stripe.subscriptions.retrieve(subscriptionId);
+    if (!subscriptionBelongsToUser(storedSub, firebaseUid) || !(await _perteneceAEsteClub(storedSub.metadata?.source, storedSub))) {
+      return res.status(403).json({ error: 'La suscripción no pertenece a esta cuenta' });
+    }
+    const sub = await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: false
     });
 
-    await db.collection('users').doc(firebaseUid).set({
-      subscription: {
-        cancelAtPeriodEnd: false,
-        updatedAt: new Date().toISOString()
-      }
-    }, { merge: true });
+    await persistStripeMembership(db, firebaseUid, sub, {
+      status: sub.status, cancelAtPeriodEnd: false,
+    });
 
     res.json({ success: true, cancelAtPeriodEnd: false });
 
@@ -2340,7 +2308,7 @@ app.post('/reactivate-subscription', requireFirebaseUser, async (req, res) => {
     } catch(e) { console.error('Reactivate email error:', e); }
   } catch (err) {
     console.error('Reactivate error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'No se pudo reactivar la suscripción' });
   }
 });
 
@@ -2358,15 +2326,24 @@ app.post('/create-portal-session', requireFirebaseUser, async (req, res) => {
       return res.status(400).json({ error: 'No se encontró suscripción activa' });
     }
 
+    const customer = await stripe.customers.retrieve(customerId);
+    let storedSub = null;
+    if (!customer?.metadata?.firebaseUid && userData.subscription?.stripeSubscriptionId) {
+      try { storedSub = await stripe.subscriptions.retrieve(userData.subscription.stripeSubscriptionId); } catch { /* se rechazará */ }
+    }
+    if (!customerBelongsToUser(customer, firebaseUid, storedSub)) {
+      return res.status(403).json({ error: 'El portal de pagos no pertenece a esta cuenta' });
+    }
+
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: returnUrl || 'https://club.dermalyssemx.com/'
+      return_url: checkoutUrl(returnUrl, 'https://club.dermalyssemx.com/', ['https://club.dermalyssemx.com'])
     });
 
     res.json({ url: session.url });
   } catch (err) {
     console.error('Portal session error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'No se pudo abrir el portal de pagos' });
   }
 });
 
@@ -2455,8 +2432,8 @@ app.post('/bunny/playback', requireFirebaseUser, async (req, res) => {
         lastPositionSeconds: 0,
         lastSeenAt: now,
         completed: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt: admin.firestore.Timestamp.fromMillis(now + (8 * 60 * 60 * 1000))
+        createdAt: FieldValue.serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(now + (8 * 60 * 60 * 1000))
       });
     }
 
@@ -2541,7 +2518,7 @@ app.post('/courses/progress', requireFirebaseUser, async (req, res) => {
         lessonProgress,
         completedLessonIds: completedIds,
         courseProgress,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
       transaction.set(userRef, { progress: { [courseId]: completedIndexes } }, { merge: true });
 
@@ -2684,7 +2661,7 @@ async function ensureBundledCatalog() {
       ...course,
       catalogVersion: BUNDLED_CATALOG_VERSION,
       catalogManaged: true,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
   });
   batch.set(stateRef, {
@@ -2694,7 +2671,7 @@ async function ensureBundledCatalog() {
     videoCount,
     previewCount,
     activeCourseIds,
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    updatedAt: FieldValue.serverTimestamp()
   }, { merge: true });
   await batch.commit();
   return { changed: true, courseCount: bundledCourseCatalog.length, videoCount, previewCount };

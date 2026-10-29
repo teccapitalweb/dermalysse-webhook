@@ -18,11 +18,15 @@ function membershipAccess(userData, nowValue) {
   const subscription = data.subscription || {};
   const status = String(subscription.status || 'none').toLowerCase();
   const periodEnd = toTimestamp(subscription.currentPeriodEnd);
+  if (subscription.cancelAtPeriodEnd === true && Number.isFinite(periodEnd)) {
+    const allowed = periodEnd > now;
+    return { allowed, reason: allowed ? 'canceling' : 'expired', expiresAt: periodEnd };
+  }
   if (status === 'active' || status === 'trialing') {
     const allowed = !Number.isFinite(periodEnd) || periodEnd > now;
     return { allowed, reason: allowed ? status : 'expired', expiresAt: periodEnd };
   }
-  if ((status === 'canceled' || subscription.cancelAtPeriodEnd === true) && Number.isFinite(periodEnd)) {
+  if (status === 'canceled' && Number.isFinite(periodEnd)) {
     const allowed = periodEnd > now;
     return { allowed, reason: allowed ? 'canceling' : 'expired', expiresAt: periodEnd };
   }

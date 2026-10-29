@@ -43,6 +43,14 @@ npm start
 
 Configura en Stripe el endpoint desplegado terminado en `/webhook` y guarda su signing secret únicamente como `STRIPE_WEBHOOK_SECRET` en Railway.
 
+El webhook admite tanto la forma histórica `invoice.subscription` como la forma actual
+`invoice.parent.subscription_details.subscription`. `users/{uid}` y `members/{uid}` se
+actualizan juntos; un evento tardío de otra suscripción nunca reemplaza la suscripción vigente.
+
+Los importes se leen de `config/club` y `config/congreso`. Si falta la configuración o contiene
+un precio inválido, el checkout se detiene: producción nunca sustituye un precio real con datos demo.
+Las URLs de retorno de Stripe se limitan a los dominios autorizados del Club y del Congreso.
+
 Stripe Checkout solicita solamente nombre individual, correo y teléfono del comprador. Empresa, consultorio y perfiles profesionales son opcionales y se capturan después del pago. Los enlaces enviados por correo usan tokens aleatorios; Firestore conserva únicamente su hash y la fecha de expiración.
 
 ## Reproducción Bunny
@@ -61,3 +69,22 @@ El catálogo local de respaldo está en `data/dermalysse-courses.json` y no cont
 - Mantén `.env` fuera de Git.
 - Las rutas de checkout, cancelación, reactivación, portal y consulta usan el UID verificado del token; no confían en un UID enviado por el navegador.
 - CORS se limita al dominio del Club y a los orígenes locales de desarrollo.
+
+## Reconciliación de membresías
+
+La auditoría es de solo lectura por defecto:
+
+```bash
+npm run memberships:audit
+```
+
+En Railway se ejecuta con las variables del servicio. Para aplicar una reconciliación se exige
+una confirmación explícita y se conserva el historial: no borra usuarios, facturas ni IDs de Stripe.
+
+```bash
+node scripts/reconcile-memberships.js --apply --confirm=RECONCILIAR_DERMALYSSE
+```
+
+La operación sincroniza Stripe → `users.subscription`, corrige la vista heredada `members` y
+marca como cancelados únicamente registros ausentes de Stripe cuyo periodo ya terminó. Cada
+ejecución aplicada deja un resumen sin datos personales en `v2_membresias_reconciliaciones`.
